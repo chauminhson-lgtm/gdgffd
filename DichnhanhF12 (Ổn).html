@@ -1,0 +1,1650 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Công cụ Dịch Hán Việt</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chosen Palette: Scholarly Calm -->
+    <!-- Application Structure Plan: Refactored the Reading Mode to use a fixed taskbar/footer for navigation and tools (Chapter List, Viet-Viet Edit, Re-translate). This solves the visibility issue for long chapters. Fixed the navigation buttons by ensuring they correctly trigger chapter slicing and AI translation in reading mode, and added a status notification mechanism. Now includes AI translation for chapter titles. -->
+    <!-- Visualization & Content Choices: The fixed footer and modal implementations prioritize user interaction, allowing seamless transition between reading and refining the translation without losing the context of the page. The status bar provides necessary feedback during asynchronous translation processes. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fdfaf6;
+            color: #4a4a4a;
+        }
+        .highlight {
+            background-color: #ffe680;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #333;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            display: inline-block;
+        }
+        .card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+        .card:hover {
+             box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+        }
+        .btn {
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+        .btn-primary {
+            background-color: #4a7c59;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #3e684b;
+        }
+        .btn-secondary {
+            background-color: #e0e0e0;
+            color: #555;
+        }
+        .btn-secondary:hover {
+            background-color: #d1d1d1;
+        }
+        .btn-ai {
+            background-color: #8c52ff;
+            color: white;
+        }
+        .btn-ai:hover {
+            background-color: #7a46e1;
+        }
+        .btn-danger {
+            background-color: #d9534f;
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #c9302c;
+        }
+        input[type="text"], textarea {
+            border: 1px solid #e0e0e0;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        input[type="text"]:focus, textarea:focus {
+            border-color: #4a7c59;
+            box-shadow: 0 0 0 2px rgba(74, 124, 89, 0.2);
+            outline: none;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .chapter-active {
+            background-color: #e6e9f2;
+            border-left: 4px solid #8c52ff;
+        }
+        .btn-promote {
+            background-color: #10b981;
+            color: white;
+        }
+        .btn-promote:hover {
+            background-color: #059669;
+        }
+        .post-sub-item {
+            background-color: #f0f9ff;
+        }
+        .progress-bar {
+            height: 8px;
+            background-color: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .progress-indicator {
+            height: 100%;
+            background-color: #4a7c59;
+            transition: width 0.3s ease;
+        }
+        /* Custom styles for Reading Mode */
+        .reading-output {
+            padding: 3rem 4rem; /* Add padding for better reading experience */
+            font-size: 1.15rem;
+            text-align: justify;
+        }
+        .reading-container {
+            max-width: 1000px; /* Constrain content width for comfortable reading */
+            margin: 0 auto;
+        }
+        .reading-output p {
+            margin-bottom: 1.5rem;
+        }
+        .reading-header {
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        /* IMPORTANT: Add padding-bottom to the main reading area to prevent the fixed footer from obscuring content */
+        #reading-interface {
+            padding-bottom: 7rem; 
+        }
+
+        .modal {
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 50;
+        }
+    </style>
+     <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+</head>
+<body class="p-4 sm:p-6 md:p-8 min-h-screen flex flex-col">
+    <div class="max-w-7xl mx-auto w-full flex-grow flex flex-col gap-8" id="editing-interface">
+        <header class="text-center">
+            <h1 class="text-4xl font-bold text-[#3e684b]">Không gian Dịch thuật Hán Việt</h1>
+            <p class="mt-2 text-lg text-gray-600">Cấu hình linh hoạt, AI hỗ trợ và từ điển cá nhân hóa.</p>
+        </header>
+
+        <!-- TOP ROW: CONFIGURATION (Book Upload & Settings) -->
+        <div id="config-row" class="grid grid-cols-1 md:grid-cols-2 gap-8 flex-shrink-0">
+            
+            <!-- Book Upload & Chapter Analysis -->
+            <div class="card p-6">
+                <button id="book-toggle" class="w-full text-left font-bold text-xl text-red-500 flex justify-between items-center py-2">
+                    <span>📚 Tải lên Sách & Phân tích Chương</span>
+                    <span id="book-toggle-icon">▼</span>
+                </button>
+                <div id="book-analysis-content" class="mt-4 space-y-4 hidden">
+                    <p class="text-sm text-gray-600 font-semibold">Tải lên tệp (.txt) chứa toàn bộ nội dung truyện tiếng Trung.</p>
+                    
+                    <div class="flex space-x-2 items-center">
+                        <input type="file" id="book-file-input" accept=".txt" class="hidden">
+                        <label for="book-file-input" id="book-file-label" class="cursor-pointer btn btn-secondary py-2 px-4 rounded-md text-sm whitespace-nowrap">Chọn Tệp Sách...</label>
+                        <button id="extract-chapters-btn" class="btn btn-ai w-full font-bold py-2 px-4 rounded-md text-sm flex items-center justify-center relative" disabled>
+                            <span id="extract-loading-spinner" class="spinner mr-2 w-4 h-4 border-white hidden"></span>
+                            ✨ AI Phân tích & Trích xuất Chương
+                        </button>
+                    </div>
+                    <div id="book-status" class="text-sm mt-2"></div>
+
+                    <div id="chapter-navigator" class="mt-4 border border-gray-200 rounded-md p-3 max-h-48 overflow-y-auto hidden">
+                        <h4 class="font-semibold mb-2">Bộ điều hướng Chương (Tải tự động)</h4>
+                        <ul id="chapters-ul" class="space-y-1">
+                            <li class="text-gray-500 text-sm">Chưa có chương nào được trích xuất.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Settings Card -->
+            <div class="card p-6">
+                <button id="settings-toggle" class="w-full text-left font-bold text-xl text-[#8c52ff] flex justify-between items-center py-2">
+                    <span>⚙️ Cài đặt Nâng cao (API & Prompt)</span>
+                    <span id="toggle-icon">▼</span>
+                </button>
+                <div id="advanced-settings" class="mt-4 space-y-4 hidden">
+                     <!-- Reading Style Settings REMOVED FROM HERE, MOVED TO MODAL -->
+                    
+                    <div class="h-px bg-gray-200 my-4"></div>
+
+                     <!-- New Chunk Size Setting -->
+                    <div class="space-y-2">
+                        <h3 class="font-semibold text-base text-gray-700">Tối ưu Tốc độ Dịch AI (Chunking)</h3>
+                        <label for="translation-chunk-size" class="block text-sm font-medium text-gray-700">Kích thước đoạn dịch (ký tự):</label>
+                        <input type="number" id="translation-chunk-size" min="1000" max="6000" step="100" class="w-full p-2 rounded-md text-sm" value="3000">
+                        <p class="text-xs text-gray-500">Giảm kích thước đoạn dịch để tăng tốc độ (nhưng có thể giảm ngữ cảnh). Khuyến nghị: 2000 - 4000.</p>
+                    </div>
+                    <div class="h-px bg-gray-200 my-4"></div>
+                    
+                    <!-- API Key Management Section -->
+                    <div class="space-y-2">
+                        <h3 class="font-semibold text-base text-gray-700 flex justify-between items-center">
+                            Quản lý API Keys
+                            <span id="key-count" class="text-sm bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">0 Khóa</span>
+                        </h3>
+                        <div class="flex space-x-2">
+                            <input type="text" id="new-api-key-input" placeholder="Nhập khóa API mới..." class="flex-1 p-2 rounded-md text-sm">
+                            <button id="add-api-key-btn" class="btn btn-primary py-2 px-4 rounded-md text-sm">Thêm Khóa</button>
+                        </div>
+                        <div id="api-key-list" class="space-y-2 max-h-32 overflow-y-auto pr-1 border border-gray-100 p-2 rounded-md">
+                            <!-- Key list will be rendered here -->
+                            <p class="text-xs text-gray-400">Khóa sẽ được lưu trong trình duyệt.</p>
+                        </div>
+                        <p class="text-xs text-gray-500">Ứng dụng sẽ tự động xoay vòng các khóa khi có lỗi.</p>
+                    </div>
+                    <!-- End API Key Management Section -->
+
+                    <div class="h-px bg-gray-200 my-4"></div>
+
+                    <div class="space-y-2">
+                        <label for="custom-prompt" class="block text-sm font-medium text-gray-700">Custom Prompt (Cho AI Dịch Hoàn Chỉnh)</label>
+                        <textarea id="custom-prompt" rows="3" class="w-full p-2 rounded-md" placeholder="Ví dụ: Dịch mượt mà theo phong cách truyện cổ trang..."></textarea>
+                        <p class="text-xs text-gray-500">Thay đổi vai trò và phong cách dịch của AI.</p>
+                    </div>
+
+                    <div class="h-px bg-gray-200 my-4"></div>
+                    
+                    <h3 class="text-lg font-semibold mb-3">Tải lên Từ điển (Hàng loạt)</h3>
+                    <p class="text-sm text-gray-600 mb-2">Định dạng tệp: TXT hoặc CSV. Mỗi dòng là một cặp **Hán tự,Nghĩa Việt**.</p>
+                    <div class="flex space-x-2 items-center">
+                        <input type="file" id="dictionary-file-input" accept=".txt, .csv" class="hidden">
+                        <label for="dictionary-file-input" class="cursor-pointer btn btn-secondary py-2 px-4 rounded-md text-sm">Chọn Tệp...</label>
+                        <button id="upload-dictionary-btn" class="btn btn-primary py-2 px-4 rounded-md text-sm" disabled>Tải & Thêm</button>
+                    </div>
+                    <div id="upload-status" class="text-sm mt-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MIDDLE ROW: WORKING AREA (Substitutions, Dictionary, and Input) -->
+        <div id="working-row" class="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-shrink-0">
+            
+            <!-- LEFT COLUMN: SUBSTITUTION & PERMANENT DICTIONARY -->
+            <div id="left-column" class="flex flex-col space-y-8">
+                
+                <!-- Runtime Substitution & Post-Substitution Card -->
+                <div class="card p-6 flex-shrink-0">
+                    <h2 class="text-2xl font-bold mb-4 text-[#4a7c59]">🔧 Tinh chỉnh Từ vựng & Hậu kỳ</h2>
+                    
+                    <!-- Hán -> Việt Substitution Override -->
+                    <h3 class="font-bold text-lg text-gray-700 mb-3 border-b pb-2">1. Hán -> Việt (Ưu tiên, Tạm thời)</h3>
+                    <p class="text-sm text-gray-600 mb-3">Thêm nhiều cặp rồi nhấn "Áp dụng & Dịch lại" 1 lần.</p>
+                    <div class="space-y-4 mb-4">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label for="han-replace" class="block text-sm font-medium text-gray-700 mb-1">Hán tự (Cần thay thế)</label>
+                                <input type="text" id="han-replace" placeholder="我" class="w-full p-2 rounded-md text-sm">
+                            </div>
+                            <div>
+                                <label for="viet-new-value" class="block text-sm font-medium text-gray-700 mb-1">Nghĩa Việt (MỚI)</label>
+                                <input type="text" id="viet-new-value" placeholder="ta / tôi" class="w-full p-2 rounded-md text-sm">
+                            </div>
+                        </div>
+                        <button id="add-runtime-substitution-btn" class="btn btn-secondary w-full font-bold py-2 px-4 rounded-md text-sm">
+                            + Thêm vào danh sách tạm
+                        </button>
+                    </div>
+                    
+                    <div id="runtime-substitution-list" class="space-y-2 max-h-36 overflow-y-auto pr-2 mb-6 border border-yellow-200 p-2 rounded-md bg-yellow-50">
+                         <p class="text-gray-500 text-sm">Chưa có cặp Hán -> Việt tạm thời.</p>
+                    </div>
+
+                    <!-- NEW: Việt -> Việt Post-Substitution -->
+                    <h3 class="font-bold text-lg text-gray-700 mb-3 border-b pb-2">2. Việt -> Việt (Hậu kỳ, Vĩnh viễn)</h3>
+                     <p class="text-sm text-gray-600 mb-3">Mọi thay đổi đều được **lưu vĩnh viễn** và dùng cho các chương/sách khác. Thêm nhiều cặp rồi nhấn "Áp dụng & Dịch lại" 1 lần.</p>
+                    <div class="space-y-4 mb-4">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label for="viet-old-post" class="block text-sm font-medium text-gray-700 mb-1">Cụm từ Việt CŨ (Đã dịch)</label>
+                                <input type="text" id="viet-old-post" placeholder="áo bào rồng" class="w-full p-2 rounded-md text-sm">
+                            </div>
+                            <div>
+                                <label for="viet-new-post" class="block text-sm font-medium text-gray-700 mb-1">Cụm từ Việt MỚI (Tinh chỉnh)</label>
+                                <input type="text" id="viet-new-post" placeholder="áo long bào" class="w-full p-2 rounded-md text-sm">
+                            </div>
+                        </div>
+                        <button id="add-post-substitution-btn" class="btn btn-secondary w-full font-bold py-2 px-4 rounded-md text-sm">
+                            + Thêm vào danh sách vĩnh viễn
+                        </button>
+                    </div>
+                    
+                    <div id="post-substitution-list" class="space-y-2 max-h-36 overflow-y-auto pr-2 border border-blue-200 p-2 rounded-md post-sub-item mb-4">
+                        <p class="text-gray-500 text-sm">Chưa có cặp Việt -> Việt vĩnh viễn.</p>
+                    </div>
+                     <button id="apply-all-substitution-btn" class="btn btn-ai w-full font-bold py-2 px-4 rounded-md text-lg">
+                        Áp dụng & Dịch lại (Batch)
+                    </button>
+                </div>
+
+                <div class="card p-6 flex-grow">
+                    <h2 class="text-2xl font-bold mb-4 text-[#3e684b]">Từ điển của bạn (Vĩnh Viễn)</h2>
+                    <div class="space-y-4 mb-6">
+                        <div>
+                            <label for="han-input" class="block text-sm font-medium text-gray-700 mb-1">Từ Hán</label>
+                            <input type="text" id="han-input" placeholder="你好" class="w-full p-2 rounded-md">
+                        </div>
+                        <div>
+                            <label for="viet-input" class="block text-sm font-medium text-gray-700 mb-1">Nghĩa Việt</label>
+                            <input type="text" id="viet-input" placeholder="Nǐ hǎo / Xin chào" class="w-full p-2 rounded-md">
+                        </div>
+                        <div class="flex space-x-2">
+                            <button id="add-word-btn" class="flex-1 btn btn-primary font-bold py-2 px-4 rounded-md">Thêm vào từ điển</button>
+                            <button id="ai-explain-btn" class="btn btn-ai font-bold py-2 px-4 rounded-md text-sm whitespace-nowrap flex items-center justify-center">
+                                ✨ Phân Tích
+                            </button>
+                        </div>
+                        <div id="han-explain-output" class="text-sm bg-indigo-50 p-3 rounded-md hidden"></div>
+                    </div>
+                    
+                    <div class="h-px bg-gray-200 my-6"></div>
+
+                    <h3 class="text-lg font-semibold mb-3">Các từ đã lưu (Vĩnh Viễn)</h3>
+                    <div id="dictionary-list" class="space-y-2 max-h-72 overflow-y-auto pr-2">
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: INPUT AREA -->
+            <div id="right-column" class="card p-6 flex flex-col space-y-4">
+                 <h2 class="text-2xl font-bold text-[#3e684b] flex-shrink-0">Công cụ Dịch</h2>
+                <div class="flex-grow flex flex-col space-y-4">
+                    <label for="chinese-input" id="chinese-input-label" class="block text-lg font-medium text-gray-700 mb-2 flex-shrink-0">Văn bản tiếng Trung (Vui lòng chọn sách để bắt đầu):</label>
+                    <textarea id="chinese-input" rows="18" class="w-full p-3 rounded-md text-base flex-grow" placeholder="Nội dung chương sẽ được tải tự động vào đây..."></textarea>
+                </div>
+                 <!-- Hán Việt / Clear Buttons -->
+                <div class="flex items-center space-x-4 mb-6 flex-shrink-0">
+                    <button id="translate-btn" class="flex-1 btn btn-primary font-bold py-3 px-4 rounded-md text-lg flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 inline-block mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m4 13l4-4M19 17v-2m-4-2l-4 4m-5-4v2m4-2l-4 4M3 11h12M9 9v2m4 7h.01M12 3h.01M3 21h18M3 17h.01M9 21v-2m4 2v-2m4-2v2m-4-2h.01M15 9h.01M12 9h.01M9 5h.01M12 5h.01M15 5h.01M3 5h.01M3 9h.01" /></svg>
+                        Dịch sang Hán Việt
+                    </button>
+                    <button id="clear-btn" class="btn btn-secondary font-bold py-3 px-4 rounded-md flex-shrink-0">Xóa</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- BOTTOM ROW: FULL-WIDTH OUTPUT & AI CONTROLS (MAXIMIZED READING SPACE) -->
+        <div id="output-row" class="card p-6 flex flex-col flex-grow">
+            
+            <label for="vietnamese-output" class="block text-lg font-medium text-gray-700 mb-2 flex-shrink-0">Kết quả Hán Việt (và AI):</label>
+            
+            <!-- Output Area (Flex-grow to fill remaining vertical space) -->
+            <div id="vietnamese-output" class="w-full p-3 rounded-md bg-gray-50 overflow-y-auto border border-gray-200 text-gray-800 flex-grow min-h-[50vh]">
+                <p class="text-gray-400">Kết quả dịch sẽ được hiển thị ở đây...</p>
+            </div>
+
+            <!-- AI Features and Navigation (PUSHED TO BOTTOM) -->
+            <div id="ai-feature-area" class="mt-6 pt-4 border-t border-gray-100 flex flex-col space-y-4 flex-shrink-0">
+                <button id="ai-translate-btn" class="w-full btn btn-ai font-bold py-3 px-4 rounded-md text-lg flex items-center justify-center relative">
+                    <span id="ai-loading-spinner" class="spinner mr-2 hidden"></span>
+                    ✨ AI Dịch Hoàn Chỉnh & Trôi Chảy
+                </button>
+                 <div id="ai-progress-area" class="hidden">
+                    <p id="ai-progress-text" class="text-sm text-gray-600 text-center"></p>
+                    <div class="progress-bar">
+                        <div id="ai-progress-indicator" class="progress-indicator" style="width: 0%;"></div>
+                    </div>
+                </div>
+                <button id="next-chapter-btn" class="w-full btn btn-secondary font-bold py-3 px-4 rounded-md text-lg flex items-center justify-center relative hidden" disabled>
+                    Tiếp tục: Dịch Chương <span id="next-chapter-title" class="ml-2 font-extrabold text-[#4a7c59]">...</span>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- NEW: READING MODE INTERFACE (Hidden by default) -->
+    <div id="reading-interface" class="hidden p-4 sm:p-6 md:p-10 min-h-screen flex flex-col transition-opacity duration-300">
+        <header class="reading-container reading-header flex justify-between items-center flex-shrink-0">
+            <button id="back-to-editor-btn" class="btn btn-secondary py-2 px-4 rounded-full text-sm font-bold flex items-center">
+                &larr; Trở lại Biên tập
+            </button>
+            <h1 id="reading-chapter-title" class="text-2xl font-extrabold text-[#3e684b] text-center flex-grow">
+                [Tên Chương]
+            </h1>
+            <!-- Navigation removed from header and moved to fixed footer -->
+        </header>
+
+        <main id="reading-content-area" class="flex-grow overflow-y-auto reading-container reading-output">
+            <!-- Translated content will be injected here -->
+        </main>
+    </div>
+
+    <!-- FIXED FOOTER (Taskbar) for Reading Mode -->
+    <footer id="reading-footer" class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl p-4 hidden z-40">
+        <div class="reading-container flex items-center justify-between space-x-4">
+            
+            <!-- Chapter Navigation -->
+            <div class="flex space-x-2">
+                <button id="prev-chapter-reading-btn" class="btn btn-secondary py-2 px-3 rounded-full flex items-center" title="Chương trước">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12h8" /></svg>
+                </button>
+                <button id="next-chapter-reading-btn" class="btn btn-secondary py-2 px-3 rounded-full flex items-center" title="Chương kế tiếp">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 9l3 3m0 0l-3 3m3-3H6M21 12h-8" /></svg>
+                </button>
+            </div>
+
+            <!-- Main Status and Tools -->
+            <div class="flex items-center space-x-4 flex-grow justify-center">
+                
+                <!-- Status Bar -->
+                <div id="reading-status" class="text-sm text-gray-500 font-semibold italic flex-grow text-center min-w-[200px]">
+                    Sẵn sàng đọc.
+                </div>
+
+                <!-- Tools -->
+                <button id="open-contents-btn" class="btn btn-primary py-2 px-4 rounded-md text-sm font-bold">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" /></svg>
+                    Mục lục
+                </button>
+                <button id="open-post-sub-btn" class="btn btn-secondary py-2 px-4 rounded-md text-sm font-bold">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                    Tinh chỉnh (V->V)
+                </button>
+                 <button id="open-style-btn" class="btn btn-secondary py-2 px-4 rounded-md text-sm font-bold">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2H7m4 0v-4" /></svg>
+                    Tùy chỉnh Đọc
+                </button>
+                <button id="retranslate-btn" class="btn btn-ai py-2 px-4 rounded-md text-sm font-bold flex items-center justify-center relative">
+                     <span id="retranslate-spinner" class="spinner mr-2 w-4 h-4 border-white hidden"></span>
+                    Dịch lại (AI)
+                </button>
+            </div>
+
+        </div>
+    </footer>
+
+
+    <!-- Modal for Chapter Contents -->
+    <div id="contents-modal" class="modal fixed inset-0 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto">
+            <h3 class="text-2xl font-bold mb-4 flex justify-between items-center">
+                Mục lục Chương
+                <button class="text-gray-500 hover:text-gray-800" id="close-contents-modal">&times;</button>
+            </h3>
+            <ul id="modal-chapters-list" class="space-y-1">
+                <!-- Chapter list will be dynamically rendered here -->
+            </ul>
+        </div>
+    </div>
+    
+    <!-- Modal for Post-Substitutions (Viet -> Viet) -->
+    <div id="post-sub-modal" class="modal fixed inset-0 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto">
+            <h3 class="text-2xl font-bold mb-4 flex justify-between items-center text-[#4a7c59]">
+                Tinh chỉnh Thuật ngữ (Viet -> Viet)
+                <button class="text-gray-500 hover:text-gray-800" id="close-post-sub-modal">&times;</button>
+            </h3>
+            <p class="text-sm text-gray-600 mb-4">Thêm các cặp Việt Cũ -> Việt Mới để thống nhất thuật ngữ. Mọi thay đổi sẽ được **lưu vĩnh viễn**.</p>
+            <div id="modal-post-sub-controls" class="space-y-4 mb-4">
+                 <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label for="modal-viet-old-post" class="block text-sm font-medium text-gray-700 mb-1">Cụm từ Việt CŨ</label>
+                        <input type="text" id="modal-viet-old-post" placeholder="áo bào rồng" class="w-full p-2 rounded-md text-sm">
+                    </div>
+                    <div>
+                        <label for="modal-viet-new-post" class="block text-sm font-medium text-gray-700 mb-1">Cụm từ Việt MỚI</label>
+                        <input type="text" id="modal-viet-new-post" placeholder="áo long bào" class="w-full p-2 rounded-md text-sm">
+                    </div>
+                </div>
+                <button id="add-modal-post-sub-btn" class="btn btn-primary w-full font-bold py-2 px-4 rounded-md text-sm">
+                    + Thêm cặp Việt -> Việt
+                </button>
+            </div>
+            
+            <h4 class="font-semibold mt-6 mb-2">Danh sách các cặp đã lưu:</h4>
+            <div id="modal-post-sub-list" class="space-y-2 border border-blue-200 p-2 rounded-md post-sub-item">
+                <!-- Post substitution list will be rendered here -->
+            </div>
+            
+        </div>
+    </div>
+    
+     <!-- Modal for Reading Style Settings (NEW) -->
+    <div id="style-settings-modal" class="modal fixed inset-0 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
+            <h3 class="text-2xl font-bold mb-4 flex justify-between items-center text-[#8c52ff]">
+                ⚙️ Tùy chỉnh Giao diện Đọc
+                <button class="text-gray-500 hover:text-gray-800" id="close-style-modal">&times;</button>
+            </h3>
+            <p class="text-sm text-gray-600 mb-4">Thay đổi sẽ được áp dụng và lưu vĩnh viễn ngay lập tức.</p>
+             <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="modal-font-size" class="block text-sm font-medium text-gray-700">Cỡ chữ (px)</label>
+                        <input type="number" id="modal-font-size" min="14" max="30" class="w-full p-2 rounded-md text-sm">
+                    </div>
+                    <div>
+                        <label for="modal-line-height" class="block text-sm font-medium text-gray-700">Chiều cao dòng (em)</label>
+                        <input type="number" id="modal-line-height" min="1.0" max="2.5" step="0.1" class="w-full p-2 rounded-md text-sm">
+                    </div>
+                    <div>
+                        <label for="modal-bg-color" class="block text-sm font-medium text-gray-700">Màu nền (Background)</label>
+                        <input type="color" id="modal-bg-color" class="w-full p-1 rounded-md h-10">
+                    </div>
+                    <div>
+                        <label for="modal-text-color" class="block text-sm font-medium text-gray-700">Màu chữ (Text Color)</label>
+                        <input type="color" id="modal-text-color" class="w-full p-1 rounded-md h-10">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        const DEFAULT_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=";
+        const DEFAULT_TRANSLATION_PROMPT = "Bạn là một chuyên gia dịch thuật tiếng Trung sang tiếng Việt. Bạn nhận được một đoạn văn đã được dịch một phần sang tiếng Việt bằng từ điển cá nhân (Các từ đã dịch được bao quanh bởi thẻ <span class='highlight'>...</span>). Nhiệm vụ của bạn là bỏ qua các thẻ HTML và dịch toàn bộ đoạn văn sang tiếng Việt tự nhiên, trôi chảy, sử dụng các từ Hán Việt đã được thay thế (nếu chúng hợp ngữ cảnh) và dịch nốt các từ tiếng Trung còn lại. Trả lời chỉ bằng văn bản dịch, không thêm lời giải thích.";
+        const DEFAULT_EXPLANATION_PROMPT = "Bạn là một trợ lý ngôn ngữ, chuyên cung cấp thông tin chi tiết về Hán tự. Phản hồi bằng tiếng Việt, cung cấp Pinyin, nghĩa phổ biến nhất và một câu ví dụ tiếng Trung với bản dịch tiếng Việt.";
+        // Đã sửa Prompt: Đảm bảo dấu hai chấm (:) và không viết hoa quá mức
+        const CHAPTER_TITLE_PROMPT = "Dịch danh sách tiêu đề chương tiếng Trung sau sang tiếng Việt. BẮT BUỘC giữ nguyên cấu trúc đánh số chương (ví dụ: Chương 101, Chương 2, v.v.) và chỉ dịch phần tên chương. Đảm bảo rằng phần số chương và tên chương được phân tách bằng dấu hai chấm (ví dụ: 'Chương 101: Tên chương'). Giữ định dạng là một danh sách các tiêu đề chương đã dịch, mỗi tiêu đề một dòng, KHÔNG THÊM BẤT KỲ VĂN BẢN NÀO KHÁC.";
+        const MAX_AI_ANALYSIS_LENGTH = 200000; 
+        const MAX_BOOK_CONTENT_LENGTH = 20000000; 
+        const DEFAULT_CHUNK_SIZE = 3000; 
+        const CHUNK_OVERLAP = 200; 
+        
+        // Default Reading Style
+        const DEFAULT_READING_STYLE = {
+            fontSize: '18',
+            lineHeight: '1.8',
+            bgColor: '#fdfaf6',
+            textColor: '#4a4a4a',
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // UI elements (Editing Mode)
+            const editingInterface = document.getElementById('editing-interface');
+            const vietnameseOutput = document.getElementById('vietnamese-output');
+            const chineseInput = document.getElementById('chinese-input');
+            const translateBtn = document.getElementById('translate-btn');
+            const aiTranslateBtn = document.getElementById('ai-translate-btn');
+            const aiLoadingSpinner = document.getElementById('ai-loading-spinner');
+            const aiProgressArea = document.getElementById('ai-progress-area');
+            const aiProgressText = document.getElementById('ai-progress-text');
+            const aiProgressIndicator = document.getElementById('ai-progress-indicator');
+            const nextChapterBtn = document.getElementById('next-chapter-btn');
+            const nextChapterTitleSpan = document.getElementById('next-chapter-title');
+            const chineseInputLabel = document.getElementById('chinese-input-label');
+            const bookFileInput = document.getElementById('book-file-input');
+            const extractChaptersBtn = document.getElementById('extract-chapters-btn');
+            const extractLoadingSpinner = document.getElementById('extract-loading-spinner');
+            const bookStatus = document.getElementById('book-status');
+            const chapterNavigator = document.getElementById('chapter-navigator');
+            const chaptersUl = document.getElementById('chapters-ul');
+            const bookFileLabel = document.getElementById('book-file-label');
+
+            // Substitution Elements
+            const runtimeSubstitutionList = document.getElementById('runtime-substitution-list');
+            const postSubstitutionList = document.getElementById('post-substitution-list');
+            const hanReplaceInput = document.getElementById('han-replace');
+            const vietNewValueInput = document.getElementById('viet-new-value');
+            const addRuntimeSubstitutionBtn = document.getElementById('add-runtime-substitution-btn'); 
+            const addPostSubstitutionBtn = document.getElementById('add-post-substitution-btn'); 
+            const vietOldPostInput = document.getElementById('viet-old-post');
+            const vietNewPostInput = document.getElementById('viet-new-post');
+            const applyAllSubstitutionBtn = document.getElementById('apply-all-substitution-btn');
+            const dictionaryList = document.getElementById('dictionary-list');
+            const hanInput = document.getElementById('han-input');
+            const vietInput = document.getElementById('viet-input');
+            const addWordBtn = document.getElementById('add-word-btn');
+            const customPromptInput = document.getElementById('custom-prompt');
+            const translationChunkSizeInput = document.getElementById('translation-chunk-size');
+            const apiKeyList = document.getElementById('api-key-list');
+            const keyCountSpan = document.getElementById('key-count');
+            const newApiKeyInput = document.getElementById('new-api-key-input');
+            const addApiKeyBtn = document.getElementById('add-api-key-btn');
+            const clearBtn = document.getElementById('clear-btn');
+            const aiExplainBtn = document.getElementById('ai-explain-btn');
+            const hanExplainOutput = document.getElementById('han-explain-output');
+            const settingsToggle = document.getElementById('settings-toggle');
+            const advancedSettings = document.getElementById('advanced-settings');
+            const toggleIcon = document.getElementById('toggle-icon');
+            const bookToggle = document.getElementById('book-toggle');
+            const bookAnalysisContent = document.getElementById('book-analysis-content');
+            const bookToggleIcon = document.getElementById('book-toggle-icon');
+            const dictionaryFileInput = document.getElementById('dictionary-file-input');
+            const uploadDictionaryBtn = document.getElementById('upload-dictionary-btn');
+            const uploadStatus = document.getElementById('upload-status');
+
+            // Reading Style Settings (MODAL CONTROLS)
+            const openStyleBtn = document.getElementById('open-style-btn');
+            const styleSettingsModal = document.getElementById('style-settings-modal');
+            const closeStyleModal = document.getElementById('close-style-modal');
+            const modalFontSizeInput = document.getElementById('modal-font-size');
+            const modalLineHeightInput = document.getElementById('modal-line-height');
+            const modalBgColorInput = document.getElementById('modal-bg-color');
+            const modalTextColorInput = document.getElementById('modal-text-color');
+            
+            // UI elements (Reading Mode)
+            const readingInterface = document.getElementById('reading-interface');
+            const readingFooter = document.getElementById('reading-footer');
+            const backToEditorBtn = document.getElementById('back-to-editor-btn');
+            const readingChapterTitle = document.getElementById('reading-chapter-title');
+            const readingContentArea = document.getElementById('reading-content-area');
+            const prevChapterReadingBtn = document.getElementById('prev-chapter-reading-btn');
+            const nextChapterReadingBtn = document.getElementById('next-chapter-reading-btn');
+            const retranslateBtn = document.getElementById('retranslate-btn');
+            const retranslateSpinner = document.getElementById('retranslate-spinner');
+            const readingStatus = document.getElementById('reading-status');
+            const openContentsBtn = document.getElementById('open-contents-btn');
+            const openPostSubBtn = document.getElementById('open-post-sub-btn');
+
+            // Modal elements
+            const contentsModal = document.getElementById('contents-modal');
+            const closeContentsModal = document.getElementById('close-contents-modal');
+            const modalChaptersList = document.getElementById('modal-chapters-list');
+            const postSubModal = document.getElementById('post-sub-modal');
+            const closePostSubModal = document.getElementById('close-post-sub-modal');
+            const modalPostSubList = document.getElementById('modal-post-sub-list');
+            const modalVietOldPostInput = document.getElementById('modal-viet-old-post');
+            const modalVietNewPostInput = document.getElementById('modal-viet-new-post');
+            const addModalPostSubBtn = document.getElementById('add-modal-post-sub-btn');
+
+
+            // State
+            let dictionary = []; // Permanent Hán -> Việt
+            let geminiApiKeys = [];
+            let lastManualTranslationOutput = ''; 
+            let lastTranslatedChineseInput = ''; 
+            let lastAITranslationOutput = ''; 
+            let rawBookContent = ''; 
+            let chapterList = [];
+            let currentChapterIndex = -1;
+            let runtimeSubstitutions = []; // Runtime Hán -> Việt overrides (Temporary)
+            let postSubstitutions = []; // Viet (Old) -> Việt (New) edits (Permanent)
+            let translationChunkSize = DEFAULT_CHUNK_SIZE;
+            let isReadingMode = false;
+            let readingStyle = { ...DEFAULT_READING_STYLE };
+
+            // --- UI STATE MANAGEMENT ---
+            function showModal(modalElement) {
+                modalElement.classList.remove('hidden');
+            }
+            function hideModal(modalElement) {
+                modalElement.classList.add('hidden');
+            }
+            
+            function applyReadingStyle() {
+                // Apply styles to the content area
+                readingContentArea.style.fontSize = `${readingStyle.fontSize}px`;
+                readingContentArea.style.lineHeight = readingStyle.lineHeight;
+                readingContentArea.style.color = readingStyle.textColor;
+                
+                // Apply background to the entire reading interface
+                readingInterface.style.backgroundColor = readingStyle.bgColor;
+
+                // Apply styles to the body as fallback/initial load
+                document.body.style.backgroundColor = readingStyle.bgColor;
+                document.body.style.color = readingStyle.textColor;
+            }
+
+            function toggleInterfaceMode(mode) {
+                isReadingMode = mode === 'reading';
+                if (isReadingMode) {
+                    editingInterface.classList.add('hidden');
+                    readingInterface.classList.remove('hidden');
+                    readingFooter.classList.remove('hidden');
+                    applyReadingStyle();
+                    updateReadingModeContent();
+                    window.scrollTo(0, 0); 
+                } else {
+                    readingInterface.classList.add('hidden');
+                    readingFooter.classList.add('hidden');
+                    editingInterface.classList.remove('hidden');
+                    window.scrollTo(0, 0); 
+                }
+            }
+            
+            function showReadingStatus(message, isError = false) {
+                readingStatus.className = `text-sm font-semibold italic flex-grow text-center min-w-[200px] ${isError ? 'text-red-600' : 'text-gray-700'}`;
+                readingStatus.textContent = message;
+                retranslateBtn.disabled = isError;
+                prevChapterReadingBtn.disabled = currentChapterIndex <= 0 || isError;
+                nextChapterReadingBtn.disabled = currentChapterIndex >= chapterList.length - 1 || isError;
+            }
+
+            function updateReadingModeContent() {
+                if (currentChapterIndex !== -1 && chapterList.length > 0) {
+                    const chapter = chapterList[currentChapterIndex];
+                    // Hiển thị tiêu đề đã dịch (tiêu đề này đã bao gồm số chương gốc)
+                    readingChapterTitle.textContent = chapter.translatedTitle || chapter.title;
+                } else {
+                     readingChapterTitle.textContent = 'Bản Dịch';
+                }
+                
+                let contentHTML = lastAITranslationOutput.replace(/\n\s*\n/g, '</p><p>').replace(/\n/g, '<br>');
+                if (!contentHTML.startsWith('<p>')) {
+                    contentHTML = `<p>${contentHTML}</p>`;
+                }
+                
+                readingContentArea.innerHTML = contentHTML;
+                showReadingStatus('Sẵn sàng đọc.');
+            }
+
+            // --- UTILITY FUNCTIONS ---
+            function escapeHtml(text) { 
+                const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+                return text.replace(/[&<>"']/g, m => map[m]);
+            }
+            function escapeRegExp(string) { 
+                return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }
+            
+            function chunkText(text, size) { 
+                const chunks = [];
+                let i = 0;
+                while (i < text.length) {
+                    let end = Math.min(i + size, text.length);
+                    let overlapStart = Math.min(i + size - CHUNK_OVERLAP, text.length);
+                    
+                    if (end < text.length) {
+                        let lastBreak = text.lastIndexOf('\n', overlapStart);
+                        if (lastBreak === -1 || lastBreak < i) {
+                            lastBreak = text.lastIndexOf('.', overlapStart);
+                        }
+                        if (lastBreak === -1 || lastBreak < i) {
+                            lastBreak = text.lastIndexOf(' ', overlapStart);
+                        }
+                        
+                        if (lastBreak > i + size * 0.8) { 
+                            end = lastBreak + 1;
+                        } else {
+                            end = overlapStart; 
+                        }
+                    }
+
+                    chunks.push(text.substring(i, end));
+                    
+                    i = end - CHUNK_OVERLAP;
+                    if (i < 0) i = 0;
+                    if (end === text.length) break;
+                }
+                return chunks;
+            }
+            function sanitizeAiResponse(rawText) { 
+                if (!rawText) return null;
+                const jsonStart = rawText.indexOf('{');
+                const jsonEnd = rawText.lastIndexOf('}');
+                
+                if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+                    let jsonString = rawText.substring(jsonStart, jsonEnd + 1);
+                    jsonString = jsonString.replace(/```json|```/g, '').trim();
+                    return jsonString;
+                }
+                return rawText.trim();
+            }
+
+            // --- API CALL HANDLING (Multi-Key Failover) ---
+            async function callGeminiAPI(systemPrompt, userQuery, mimeType = "text/plain", schema = null, apiKeyOverride = null, retries = 0) { 
+                const keys = apiKeyOverride ? [apiKeyOverride] : geminiApiKeys;
+                const apiUrl = DEFAULT_API_URL;
+                
+                if (keys.length === 0) {
+                    throw new Error("Vui lòng thêm ít nhất một Gemini API Key trong phần Cài đặt Nâng cao.");
+                }
+
+                let lastError = null;
+
+                const generationConfig = { responseMimeType: mimeType };
+                if (mimeType === "application/json" && schema) {
+                    generationConfig.responseSchema = schema;
+                }
+
+                for (let i = 0; i < keys.length; i++) {
+                    const apiKey = keys[i];
+                    const url = apiUrl + apiKey;
+                    const payload = {
+                        contents: [{ parts: [{ text: userQuery }] }],
+                        systemInstruction: { parts: [{ text: systemPrompt }] },
+                        generationConfig: generationConfig
+                    };
+
+                    try {
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!response.ok) {
+                            const errorStatus = response.status;
+                            let errorDetail = `Lỗi ${errorStatus}`;
+                            try {
+                                const errorData = await response.json();
+                                errorDetail = errorData.error.message || errorDetail;
+                            } catch {}
+
+                            if (errorStatus === 429) {
+                                lastError = `Khóa API ${i + 1} (${apiKey.substring(0,4)}...) đã bị giới hạn tốc độ (429). Đang thử khóa tiếp theo...`;
+                            } else if (errorStatus === 400 || errorStatus === 403) {
+                                lastError = `Khóa API ${i + 1} (${apiKey.substring(0,4)}...) không hợp lệ hoặc không có quyền truy cập (400/403). Đang thử khóa tiếp theo...`;
+                            } else {
+                                lastError = `Khóa API ${i + 1} (${apiKey.substring(0,4)}...) lỗi: ${errorDetail}`;
+                            }
+                            console.error(lastError);
+                            continue;
+                        }
+
+                        const result = await response.json();
+                        let text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                        if (text) {
+                            if (mimeType === "application/json") {
+                                text = sanitizeAiResponse(text);
+                            }
+                            return { text, usedKey: apiKey };
+                        } else {
+                            lastError = `Khóa API ${i + 1} (${apiKey.substring(0,4)}...) trả về cấu trúc rỗng. Đang thử khóa tiếp theo...`;
+                            console.error(lastError);
+                            continue;
+                        }
+
+                    } catch (error) {
+                        lastError = `Khóa API ${i + 1} (${apiKey.substring(0,4)}...) lỗi kết nối: ${error.message}. Đang thử khóa tiếp theo...`;
+                        console.error(lastError);
+                        continue;
+                    }
+                }
+
+                throw new Error(`Tất cả ${keys.length} khóa API đều đã thất bại. Lỗi cuối cùng: ${lastError || 'Không có phản hồi.'}`);
+            }
+
+            // --- CORE APP LOGIC ---
+            
+            // Settings and Dictionary Loading (Retained for brevity)
+            function loadSettings() { 
+                geminiApiKeys = JSON.parse(localStorage.getItem('geminiApiKeys') || '[]');
+                const storedPrompt = localStorage.getItem('customPrompt') || DEFAULT_TRANSLATION_PROMPT;
+                customPromptInput.value = storedPrompt;
+                const storedChunkSize = localStorage.getItem('translationChunkSize');
+                translationChunkSize = storedChunkSize ? parseInt(storedChunkSize) : DEFAULT_CHUNK_SIZE;
+                translationChunkSizeInput.value = translationChunkSize;
+                renderKeyList();
+                loadReadingStyle();
+            }
+            function loadReadingStyle() {
+                const storedStyle = localStorage.getItem('readingStyle');
+                if (storedStyle) {
+                    readingStyle = JSON.parse(storedStyle);
+                } else {
+                    readingStyle = { ...DEFAULT_READING_STYLE };
+                }
+                // Set modal inputs to current stored style
+                modalFontSizeInput.value = readingStyle.fontSize;
+                modalLineHeightInput.value = readingStyle.lineHeight;
+                modalBgColorInput.value = readingStyle.bgColor;
+                modalTextColorInput.value = readingStyle.textColor;
+                applyReadingStyle();
+            }
+            function saveReadingStyle() {
+                readingStyle = {
+                    fontSize: modalFontSizeInput.value,
+                    lineHeight: modalLineHeightInput.value,
+                    bgColor: modalBgColorInput.value,
+                    textColor: modalTextColorInput.value,
+                };
+                localStorage.setItem('readingStyle', JSON.stringify(readingStyle));
+                applyReadingStyle();
+            }
+            function savePrompt() { localStorage.setItem('customPrompt', customPromptInput.value.trim()); }
+            function saveChunkSize() {
+                const size = parseInt(translationChunkSizeInput.value);
+                if (size >= 1000 && size <= 6000) {
+                    translationChunkSize = size;
+                    localStorage.setItem('translationChunkSize', size);
+                }
+            }
+            function saveKeys() {
+                localStorage.setItem('geminiApiKeys', JSON.stringify(geminiApiKeys));
+                renderKeyList();
+            }
+            function renderKeyList() { 
+                apiKeyList.innerHTML = '';
+                keyCountSpan.textContent = `${geminiApiKeys.length} Khóa`;
+                if (geminiApiKeys.length === 0) {
+                    apiKeyList.innerHTML = '<p class="text-xs text-red-500">Chưa có khóa nào. Các tính năng AI sẽ không hoạt động.</p>';
+                    return;
+                }
+                geminiApiKeys.forEach((key, index) => {
+                    const keyEl = document.createElement('div');
+                    keyEl.className = 'flex justify-between items-center bg-gray-50 p-2 rounded-md';
+                    keyEl.innerHTML = `
+                        <div>
+                            <span class="font-medium">Key ${index + 1}: </span>
+                            <span class="text-sm font-mono text-gray-700">${key.substring(0, 4)}...${key.substring(key.length - 4)}</span>
+                        </div>
+                        <button data-index="${index}" class="delete-key-btn text-red-500 hover:text-red-700 text-xs font-bold py-1 px-2 rounded-md">Xóa</button>
+                    `;
+                    apiKeyList.appendChild(keyEl);
+                });
+            }
+            function loadDictionary() { 
+                const storedDict = localStorage.getItem('hanVietDict');
+                if (storedDict) { dictionary = JSON.parse(storedDict); }
+            }
+            function loadPostSubstitutions() { 
+                const storedSubs = localStorage.getItem('postSubstitutions');
+                if (storedSubs) { postSubstitutions = JSON.parse(storedSubs); }
+            }
+            function saveDictionary() { localStorage.setItem('hanVietDict', JSON.stringify(dictionary)); }
+            function savePostSubstitutions() { localStorage.setItem('postSubstitutions', JSON.stringify(postSubstitutions)); }
+            function renderDictionary() { 
+                dictionaryList.innerHTML = '';
+                if (dictionary.length === 0) {
+                    dictionaryList.innerHTML = '<p class="text-gray-500 text-sm">Từ điển của bạn chưa có từ nào.</p>';
+                    return;
+                }
+                dictionary.forEach((word, index) => {
+                    const wordEl = document.createElement('div');
+                    wordEl.className = 'flex justify-between items-center bg-gray-50 p-2 rounded-md';
+                    wordEl.innerHTML = `<div><span class="font-semibold text-gray-800">${word.han}</span><span class="text-gray-500 mx-2">→</span><span class="text-gray-700">${word.viet}</span></div><button data-index="${index}" class="delete-btn text-red-500 hover:text-red-700 text-xs font-bold py-1 px-2 rounded-md">Xóa</button>`;
+                    dictionaryList.appendChild(wordEl);
+                });
+            }
+            function addWord(han, viet) { 
+                if (han && viet) {
+                    const existingIndex = dictionary.findIndex(w => w.han === han);
+                    if (existingIndex !== -1) { dictionary[existingIndex].viet = viet; } else { dictionary.unshift({ han, viet }); }
+                    return true;
+                }
+                return false;
+            }
+            function renderRuntimeSubstitutions() { 
+                runtimeSubstitutionList.innerHTML = '';
+                if (runtimeSubstitutions.length === 0) {
+                    runtimeSubstitutionList.innerHTML = '<p class="text-gray-500 text-sm">Chưa có cặp Hán -> Việt tạm thời.</p>';
+                    return;
+                }
+                runtimeSubstitutions.forEach((word, index) => {
+                    const wordEl = document.createElement('div');
+                    wordEl.className = 'flex justify-between items-center bg-yellow-100 p-2 rounded-md';
+                    wordEl.innerHTML = `<div class="flex flex-col text-sm"><span class="font-bold text-gray-800">${word.han}</span><span class="text-gray-600">→ ${word.viet}</span></div><div class="flex space-x-1"><button data-han="${word.han}" data-viet="${word.viet}" class="promote-btn btn btn-promote text-xs py-1 px-2 rounded-md">Lưu vĩnh viễn</button><button data-index="${index}" class="delete-runtime-btn btn btn-danger text-xs py-1 px-2 rounded-md">Xóa</button></div>`;
+                    runtimeSubstitutionList.appendChild(wordEl);
+                });
+            }
+            function addRuntimeSubstitution(han, viet) { 
+                 if (han && viet) {
+                    const existingIndex = runtimeSubstitutions.findIndex(w => w.han === han);
+                    if (existingIndex !== -1) { runtimeSubstitutions[existingIndex].viet = viet; } else { runtimeSubstitutions.unshift({ han, viet }); }
+                    renderRuntimeSubstitutions();
+                    return true;
+                }
+                return false;
+            }
+            function renderPostSubstitutions(targetElement = postSubstitutionList) { 
+                targetElement.innerHTML = '';
+                if (postSubstitutions.length === 0) {
+                    targetElement.innerHTML = '<p class="text-gray-500 text-sm">Chưa có cặp Việt -> Việt vĩnh viễn.</p>';
+                    return;
+                }
+                postSubstitutions.forEach((pair, index) => {
+                    const wordEl = document.createElement('div');
+                    wordEl.className = 'flex justify-between items-center post-sub-item p-2 rounded-md';
+                    wordEl.innerHTML = `<div class="flex flex-col text-sm"><span class="font-bold text-gray-800">Cũ: ${pair.old}</span><span class="text-gray-600">→ Mới: ${pair.new}</span></div><div class="flex space-x-1"><button data-index="${index}" class="delete-post-btn btn btn-danger text-xs py-1 px-2 rounded-md">Xóa</button></div>`;
+                    targetElement.appendChild(wordEl);
+                });
+            }
+            function addPostSubstitution(oldValue, newValue) { 
+                if (oldValue && newValue) {
+                    const existingIndex = postSubstitutions.findIndex(p => p.old === oldValue);
+                    if (existingIndex !== -1) { postSubstitutions[existingIndex].new = newValue; } else { postSubstitutions.unshift({ old: oldValue, new: newValue }); }
+                    savePostSubstitutions();
+                    renderPostSubstitutions();
+                    renderPostSubstitutions(modalPostSubList);
+                    return true;
+                }
+                return false;
+            }
+            function deletePostSubstitution(index) { 
+                postSubstitutions.splice(index, 1);
+                savePostSubstitutions(); 
+                renderPostSubstitutions();
+                renderPostSubstitutions(modalPostSubList);
+            }
+
+            function translateText() { 
+                let inputText = chineseInput.value;
+                if (!inputText.trim()) {
+                    vietnameseOutput.innerHTML = '<p class="text-gray-400">Vui lòng nhập văn bản cần dịch.</p>';
+                    lastManualTranslationOutput = '';
+                    lastTranslatedChineseInput = ''; 
+                    return;
+                }
+                
+                let translatedText = escapeHtml(inputText);
+                
+                const masterDictionary = [
+                    ...runtimeSubstitutions, 
+                    ...dictionary.filter(perm => !runtimeSubstitutions.some(runtime => runtime.han === perm.han))
+                ];
+
+                const sortedDictionary = masterDictionary.sort((a, b) => b.han.length - a.han.length);
+
+                sortedDictionary.forEach(word => {
+                    const regex = new RegExp(escapeRegExp(escapeHtml(word.han)), 'g');
+                    translatedText = translatedText.replace(regex, `<span class="highlight">${escapeHtml(word.viet)}</span>`);
+                });
+
+                let postRefinedText = translatedText;
+                const sortedPostSubstitutions = [...postSubstitutions].sort((a, b) => b.old.length - a.old.length);
+
+                sortedPostSubstitutions.forEach(postSub => {
+                    const oldEscaped = escapeHtml(postSub.old);
+                    const newEscaped = escapeHtml(postSub.new);
+
+                    const oldHighlightRegex = new RegExp(`<span class="highlight">${escapeRegExp(oldEscaped)}</span>`, 'g');
+                    postRefinedText = postRefinedText.replace(oldHighlightRegex, `<span class="highlight">${newEscaped}</span>`);
+
+                    const oldTextRegex = new RegExp(escapeRegExp(oldEscaped), 'g');
+                    postRefinedText = postRefinedText.replace(oldTextRegex, `<span class="highlight">${newEscaped}</span>`);
+                });
+                
+                lastManualTranslationOutput = postRefinedText;
+                lastTranslatedChineseInput = inputText; 
+                vietnameseOutput.innerHTML = postRefinedText.replace(/\n/g, '<br>');
+                
+                if (geminiApiKeys.length > 0) {
+                     aiTranslateBtn.classList.remove('hidden');
+                } else {
+                    aiTranslateBtn.classList.add('hidden');
+                }
+            }
+            
+            async function fetchAITranslation() {
+                if (chineseInput.value !== lastTranslatedChineseInput) {
+                    translateText();
+                }
+
+                if (!lastManualTranslationOutput.trim()) {
+                    vietnameseOutput.innerHTML = '<p class="text-red-500">Vui lòng nhập văn bản tiếng Trung vào ô dịch.</p>';
+                    return;
+                }
+
+                if (geminiApiKeys.length === 0) {
+                    vietnameseOutput.innerHTML = `<div class="mt-4 p-4 rounded-md bg-red-100 border border-red-400 text-red-700"><h4 class="font-bold">⚠️ LỖI API</h4><p class="text-sm">Vui lòng thêm ít nhất một Gemini API Key trong phần Cài đặt Nâng cao để sử dụng tính năng AI.</p></div>`;
+                    return;
+                }
+                
+                aiTranslateBtn.disabled = true;
+                retranslateBtn.disabled = true;
+                aiLoadingSpinner.classList.remove('hidden');
+                retranslateSpinner.classList.remove('hidden');
+                aiProgressArea.classList.remove('hidden');
+                
+                const originalContentForRecovery = vietnameseOutput.innerHTML; 
+                
+                const chunks = chunkText(lastManualTranslationOutput, translationChunkSize);
+                const totalChunks = chunks.length;
+                let translatedChunks = Array(totalChunks).fill(null);
+                let completedChunks = 0;
+                
+                const chapterTitle = chapterList[currentChapterIndex]?.translatedTitle || chapterList[currentChapterIndex]?.title || 'Chương hiện tại';
+                const initialStatusMessage = `Đang dịch chương "${chapterTitle}": 0/${totalChunks} đoạn...`;
+
+                aiProgressText.textContent = initialStatusMessage;
+                showReadingStatus(initialStatusMessage.replace(': 0', ': Đang xử lý'), false);
+                aiProgressIndicator.style.width = '0%';
+
+                const systemPrompt = customPromptInput.value.trim() || DEFAULT_TRANSLATION_PROMPT;
+
+                const translationPromises = chunks.map((chunk, index) => {
+                    const userQuery = `Dịch đoạn văn sau:\n\n${chunk}`;
+                    
+                    return new Promise(async (resolve, reject) => {
+                        await new Promise(r => setTimeout(r, index * 100)); 
+                        
+                        try {
+                            const result = await callGeminiAPI(systemPrompt, userQuery);
+                            translatedChunks[index] = result.text;
+                            completedChunks++;
+                            
+                            aiProgressText.textContent = `Đang dịch chương "${chapterTitle}": ${completedChunks}/${totalChunks} đoạn...`;
+                            aiProgressIndicator.style.width = `${(completedChunks / totalChunks) * 100}%`;
+                            showReadingStatus(`Đang dịch (${completedChunks}/${totalChunks})...`, false);
+
+                            resolve();
+                        } catch (error) {
+                            reject(error);
+                        }
+                    });
+                });
+
+                try {
+                    await Promise.all(translationPromises);
+                    
+                    const finalTranslation = translatedChunks.join('\n').trim(); 
+                    lastAITranslationOutput = finalTranslation; 
+                    
+                    aiProgressText.textContent = `Hoàn thành dịch thuật ${totalChunks}/${totalChunks} đoạn.`;
+                    aiProgressIndicator.style.width = '100%';
+
+                    vietnameseOutput.innerHTML = `<h3 class="text-xl font-semibold mb-2 text-[#8c52ff]">✨ Dịch Hoàn Chỉnh (AI)</h3><p class="whitespace-pre-wrap">${finalTranslation}</p>`;
+                    
+                    toggleInterfaceMode('reading');
+                    showReadingStatus('Dịch hoàn chỉnh thành công!', false);
+
+
+                } catch (error) {
+                    vietnameseOutput.innerHTML = originalContentForRecovery; 
+                    
+                    vietnameseOutput.innerHTML += `<div class="mt-4 p-4 rounded-md bg-red-100 border border-red-400 text-red-700"><h4 class="font-bold">⚠️ LỖI DỊCH THUẬT AI</h4><p class="text-sm">Đã xảy ra lỗi trong quá trình dịch song song. Toàn bộ ${geminiApiKeys.length} khóa API đều đã bị từ chối hoặc bị giới hạn tốc độ. Kết quả Hán Việt thủ công đã được khôi phục. Vui lòng kiểm tra Keys hoặc giới hạn sử dụng.</p><p class="text-xs mt-1">Chi tiết lỗi: ${error.message}</p></div>`;
+                    console.error("AI Translation Error:", error);
+                    showReadingStatus('Lỗi: Tất cả Keys đều thất bại!', true);
+                    toggleInterfaceMode('editing'); // Quay lại chế độ chỉnh sửa để xem lỗi
+
+                } finally {
+                    aiTranslateBtn.disabled = false;
+                    retranslateBtn.disabled = false;
+                    aiLoadingSpinner.classList.add('hidden');
+                    retranslateSpinner.classList.add('hidden');
+                    setTimeout(() => {
+                        aiProgressArea.classList.add('hidden');
+                        aiProgressIndicator.style.width = '0%';
+                        updateNextChapterButton();
+                    }, 2000);
+                }
+            }
+
+            // Chapter Navigation & Book Slicing Logic 
+            const chapterSchema = { 
+                type: "OBJECT",
+                properties: {
+                    chapters: {
+                        type: "ARRAY",
+                        description: "An array of extracted chapter titles and their starting markers. The order must be maintained.",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                title: { type: "STRING", description: "The clean title of the chapter (e.g., 'Chương 1: Bắt đầu')." },
+                                startMarker: { type: "STRING", description: "The exact Hán tự string marking the start of this chapter in the raw text (e.g., '第1章', 'Chương 1', '第一章'). This marker is used for slicing." }
+                            },
+                            required: ["title", "startMarker"]
+                        }
+                    }
+                }
+            };
+            
+            async function translateChapterTitles(titles) {
+                if (geminiApiKeys.length === 0) return titles;
+
+                const titleListString = titles.join('\n');
+                const systemPrompt = CHAPTER_TITLE_PROMPT;
+                const userQuery = titleListString;
+                
+                try {
+                    const { text: translatedText } = await callGeminiAPI(systemPrompt, userQuery);
+                    // Sửa lỗi: Đảm bảo dấu hai chấm (:) và không viết hoa quá mức
+                    // Vẫn cần dùng split/map vì AI trả về danh sách, không phải JSON
+                    const cleanedTitles = translatedText.trim().split('\n')
+                        .map(t => t.trim())
+                        .map(t => {
+                            // Cố gắng đảm bảo cấu trúc 'Chương X: Tên'
+                            if (t.startsWith('Chương') && !t.includes(':')) {
+                                const match = t.match(/^(Chương\s*\d+)\s*(.*)/i);
+                                if (match) {
+                                    return `${match[1].trim()}: ${match[2].trim()}`;
+                                }
+                            }
+                            return t;
+                        });
+                    return cleanedTitles;
+                } catch (error) {
+                    console.error("Lỗi dịch tiêu đề AI:", error);
+                    return titles;
+                }
+            }
+            
+            function handleBookUpload() { 
+                const file = bookFileInput.files[0];
+                if (!file) return;
+
+                bookFileLabel.textContent = `Tệp: ${file.name}`;
+                rawBookContent = ''; 
+                chapterList = [];
+                currentChapterIndex = -1;
+                chapterNavigator.classList.add('hidden');
+                
+                extractChaptersBtn.disabled = false; 
+                bookStatus.className = 'text-gray-500 text-sm mt-2';
+                bookStatus.textContent = `Tệp "${file.name}" đã sẵn sàng. Vui lòng bấm "AI Phân tích..."`;
+                
+                runtimeSubstitutions = []; 
+                renderRuntimeSubstitutions();
+                renderPostSubstitutions();
+
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    rawBookContent = e.target.result;
+                    if (rawBookContent.length > MAX_BOOK_CONTENT_LENGTH) {
+                        bookStatus.className = 'text-red-500 text-sm mt-2 font-bold';
+                        bookStatus.textContent = `Tệp quá lớn (> ${MAX_BOOK_CONTENT_LENGTH / 1000000}MB). Vui lòng chọn tệp nhỏ hơn.`;
+                        extractChaptersBtn.disabled = true;
+                        rawBookContent = '';
+                    } else {
+                        extractChaptersBtn.disabled = false; 
+                    }
+                };
+                reader.onerror = () => {
+                    bookStatus.className = 'text-red-500 text-sm mt-2';
+                    bookStatus.textContent = 'Lỗi khi đọc tệp.';
+                    extractChaptersBtn.disabled = true;
+                };
+                reader.readAsText(file);
+            }
+
+            async function extractChapters(contentForAI) { 
+                if (geminiApiKeys.length === 0) {
+                    bookStatus.className = 'text-red-500 text-sm mt-2';
+                    bookStatus.textContent = 'Không thể phân tích: Vui lòng thêm API Key.';
+                    return;
+                }
+
+                extractChaptersBtn.disabled = true;
+                extractLoadingSpinner.classList.remove('hidden');
+                bookStatus.className = 'text-gray-500 text-sm mt-2';
+                bookStatus.textContent = `AI đang phân tích cấu trúc chương từ ${MAX_AI_ANALYSIS_LENGTH.toLocaleString('vi-VN')} ký tự đầu...`;
+                
+                const systemPrompt = "Bạn là một công cụ phân tích cấu trúc truyện/tiểu thuyết. Nhiệm vụ của bạn là trích xuất tiêu đề của các chương và chuỗi Hán tự chính xác đánh dấu sự bắt đầu của chương đó (startMarker) từ văn bản thô. BẮT BUỘNG chỉ trả về JSON theo Schema được cung cấp, KHÔNG THÊM BẤT KỲ VĂN BẢN, GIẢI THÍCH, HOẶC MÃ MARKDOWN NÀO (như ```json).";
+                const userQuery = `Trích xuất danh sách chương (title và startMarker) từ nội dung sau:\n\n${contentForAI}`; 
+
+                let rawResponse = null;
+
+                try {
+                    const response = await callGeminiAPI(systemPrompt, userQuery, "application/json", chapterSchema);
+                    rawResponse = response.text; 
+
+                    const result = JSON.parse(rawResponse); 
+                    chapterList = result.chapters || [];
+
+                    if (chapterList.length > 1) {
+                        // Bắt đầu dịch tiêu đề
+                        bookStatus.textContent = `Đã trích xuất ${chapterList.length} chương. Đang dịch tiêu đề...`;
+                        const originalTitles = chapterList.map(c => c.title);
+                        const translatedTitles = await translateChapterTitles(originalTitles);
+                        
+                        // Cập nhật chapterList với tiêu đề đã dịch
+                        chapterList.forEach((chapter, index) => {
+                            chapter.translatedTitle = translatedTitles[index] || chapter.title;
+                        });
+
+                        currentChapterIndex = 0;
+                        renderChapterNavigator();
+                        chapterNavigator.classList.remove('hidden');
+                        selectChapter(0, false); 
+                        bookStatus.className = 'text-green-600 text-sm mt-2 font-semibold';
+                        bookStatus.textContent = `Thành công! Đã trích xuất & dịch ${chapterList.length} tiêu đề chương. Đang tải chương đầu tiên.`;
+                    } else {
+                        chapterList = [];
+                        bookStatus.className = 'text-red-500 text-sm mt-2';
+                        bookStatus.textContent = 'AI không thể trích xuất cấu trúc chương rõ ràng (Chỉ tìm thấy 0 hoặc 1 chương). Vui lòng kiểm tra lại định dạng tệp.';
+                        chapterNavigator.classList.add('hidden');
+                    }
+                } catch (error) {
+                    let displayError = `Lỗi phân tích JSON. Vui lòng thử lại.`;
+                    if (rawResponse) {
+                         displayError = `Phân tích thất bại. Phản hồi thô của AI: "${rawResponse.substring(0, 100)}..."`;
+                    } else if (error.message.includes("Tất cả")) {
+                        displayError = error.message; 
+                    }
+                    bookStatus.className = 'text-red-500 text-sm mt-2';
+                    bookStatus.textContent = displayError;
+                    chapterList = [];
+                } finally {
+                    extractChaptersBtn.disabled = false;
+                    extractLoadingSpinner.classList.add('hidden');
+                }
+            }
+
+            function sliceChapterContent(index) { 
+                const maxChapterLength = 20000; 
+                if (index < 0 || index >= chapterList.length) return '';
+                const currentChapter = chapterList[index];
+                const startMarker = currentChapter.startMarker;
+                let endMarker = '';
+                if (index < chapterList.length - 1) { endMarker = chapterList[index + 1].startMarker; }
+                const startIndex = rawBookContent.indexOf(startMarker);
+                if (startIndex === -1) { return `Lỗi: Không tìm thấy điểm bắt đầu "${startMarker}" trong tệp sách.`; }
+                let endIndex;
+                if (endMarker) {
+                    endIndex = rawBookContent.indexOf(endMarker, startIndex + startMarker.length);
+                    if (endIndex === -1) { endIndex = rawBookContent.length; }
+                } else { endIndex = rawBookContent.length; }
+                let content = rawBookContent.substring(startIndex, endIndex).trim();
+                if (content.length > maxChapterLength) {
+                    content = content.substring(0, maxChapterLength) + "\n\n[...Nội dung còn lại của chương đã bị cắt do quá dài. Vui lòng tải lên tệp được chia nhỏ hơn hoặc sao chép thủ công phần tiếp theo.]";
+                }
+                return content;
+             }
+            function renderChapterNavigator() { 
+                chaptersUl.innerHTML = '';
+                modalChaptersList.innerHTML = '';
+                chapterList.forEach((chapter, index) => {
+                    const chapterNumber = index + 1; // STT
+                    const displayTitle = chapter.translatedTitle || chapter.title;
+                    const originalTitle = chapter.title;
+
+                    // Editing mode navigator
+                    const li = document.createElement('li');
+                    li.className = `p-2 rounded-md text-sm cursor-pointer hover:bg-gray-100 transition-colors ${index === currentChapterIndex ? 'chapter-active font-semibold' : ''}`;
+                    // Sửa lỗi: Chỉ thêm STT (vị trí), giữ nguyên Tiêu đề đã dịch (chứa số chương gốc)
+                    li.innerHTML = `<span class="font-bold text-[#8c52ff]">STT ${chapterNumber}.</span> ${displayTitle} <span class="text-xs text-gray-500 italic">(${originalTitle})</span>`;
+                    li.dataset.index = index;
+                    li.addEventListener('click', () => selectChapter(index));
+                    chaptersUl.appendChild(li);
+
+                    // Modal navigator
+                    const modalLi = document.createElement('li');
+                    modalLi.className = `p-2 rounded-md text-base cursor-pointer hover:bg-gray-100 transition-colors ${index === currentChapterIndex ? 'chapter-active font-bold' : ''}`;
+                    // Sửa lỗi: Chỉ thêm STT (vị trí), giữ nguyên Tiêu đề đã dịch (chứa số chương gốc)
+                    modalLi.innerHTML = `<span class="font-bold text-[#8c52ff]">STT ${chapterNumber}.</span> <span class="text-gray-800">${displayTitle}</span> <span class="text-xs text-gray-500 italic">(${originalTitle})</span>`;
+                    modalLi.dataset.index = index;
+                    modalLi.addEventListener('click', () => { selectChapter(index); hideModal(contentsModal); });
+                    modalChaptersList.appendChild(modalLi);
+                });
+             }
+            function selectChapter(index, autoScroll = true) { 
+                if (index < 0 || index >= chapterList.length) return;
+                currentChapterIndex = index;
+                renderChapterNavigator();
+                runtimeSubstitutions = []; 
+                renderRuntimeSubstitutions();
+                const chapterTitle = chapterList[index].translatedTitle || chapterList[index].title;
+                // Sửa: Chỉ hiển thị tiêu đề đã dịch
+                chineseInputLabel.textContent = `Văn bản tiếng Trung: Đang dịch "${chapterTitle}"`;
+                chineseInput.value = "Đang tải nội dung...";
+                const content = sliceChapterContent(index);
+                chineseInput.value = content;
+                vietnameseOutput.innerHTML = '<p class="text-gray-400">Kết quả dịch sẽ được hiển thị ở đây...</p>';
+                lastTranslatedChineseInput = ''; 
+                updateNextChapterButton();
+                if (autoScroll && !isReadingMode) {
+                    chineseInput.scrollIntoView({ behavior: 'smooth' });
+                    chineseInput.focus();
+                }
+            }
+            function updateNextChapterButton() { 
+                if (currentChapterIndex >= 0 && currentChapterIndex < chapterList.length - 1) {
+                    const nextChapter = chapterList[currentChapterIndex + 1];
+                    const nextChapterTitle = nextChapter.translatedTitle || nextChapter.title;
+                    // Sửa: Chỉ hiển thị tiêu đề đã dịch
+                    nextChapterTitleSpan.textContent = nextChapterTitle;
+                    nextChapterBtn.classList.remove('hidden');
+                    nextChapterBtn.disabled = false;
+                } else if (currentChapterIndex === chapterList.length - 1 && chapterList.length > 0) {
+                    nextChapterTitleSpan.textContent = 'Đã hoàn thành cuốn sách!';
+                    nextChapterBtn.classList.remove('hidden');
+                    nextChapterBtn.disabled = true;
+                } else {
+                    nextChapterBtn.classList.add('hidden');
+                    nextChapterBtn.disabled = true;
+                }
+            }
+            function goToNextChapter() {
+                if (currentChapterIndex < chapterList.length - 1) {
+                    selectChapter(currentChapterIndex + 1);
+                    if (isReadingMode) {
+                        fetchAITranslation();
+                    }
+                } else {
+                    //alert('Bạn đã hoàn thành chương cuối cùng trong sách!'); // Removed alert per user constraints
+                    console.log('Bạn đã hoàn thành chương cuối cùng trong sách!'); 
+                }
+            }
+            function goToPrevChapter() {
+                if (currentChapterIndex > 0) {
+                    selectChapter(currentChapterIndex - 1);
+                    if (isReadingMode) {
+                        fetchAITranslation();
+                    }
+                }
+            }
+
+            // --- INITIALIZATION ---
+            function initialize() {
+                loadSettings();
+                loadDictionary();
+                loadPostSubstitutions(); 
+                renderDictionary();
+                renderRuntimeSubstitutions();
+                renderPostSubstitutions(postSubstitutionList);
+                renderPostSubstitutions(modalPostSubList);
+            }
+
+            // --- EVENT LISTENERS ---
+            backToEditorBtn.addEventListener('click', () => toggleInterfaceMode('editing'));
+            
+            // Reading Style Listeners (Modal)
+            openStyleBtn.addEventListener('click', () => {
+                // Ensure modal inputs reflect current style when opening
+                modalFontSizeInput.value = readingStyle.fontSize;
+                modalLineHeightInput.value = readingStyle.lineHeight;
+                modalBgColorInput.value = readingStyle.bgColor;
+                modalTextColorInput.value = readingStyle.textColor;
+                showModal(styleSettingsModal);
+            });
+            closeStyleModal.addEventListener('click', () => hideModal(styleSettingsModal));
+            
+            modalFontSizeInput.addEventListener('change', saveReadingStyle);
+            modalLineHeightInput.addEventListener('change', saveReadingStyle);
+            modalBgColorInput.addEventListener('change', saveReadingStyle);
+            modalTextColorInput.addEventListener('change', saveReadingStyle);
+
+            // Fixed Footer Navigation (Bug Fix)
+            prevChapterReadingBtn.addEventListener('click', goToPrevChapter);
+            nextChapterReadingBtn.addEventListener('click', goToNextChapter);
+            retranslateBtn.addEventListener('click', fetchAITranslation);
+            openContentsBtn.addEventListener('click', () => showModal(contentsModal));
+            closeContentsModal.addEventListener('click', () => hideModal(contentsModal));
+            openPostSubBtn.addEventListener('click', () => showModal(postSubModal));
+            closePostSubModal.addEventListener('click', () => hideModal(postSubModal));
+            
+            // Modal Post Sub Controls
+            addModalPostSubBtn.addEventListener('click', () => {
+                const oldVal = modalVietOldPostInput.value.trim();
+                const newVal = modalVietNewPostInput.value.trim();
+                if (addPostSubstitution(oldVal, newVal)) {
+                    modalVietOldPostInput.value = '';
+                    modalVietNewPostInput.value = '';
+                } else {
+                    console.error('Vui lòng điền đầy đủ Cụm từ Việt CŨ và Cụm từ Việt MỚI.');
+                }
+            });
+            modalPostSubList.addEventListener('click', (e) => {
+                if (e.target.classList.contains('delete-post-btn')) {
+                    const index = e.target.getAttribute('data-index');
+                    deletePostSubstitution(index); 
+                }
+            });
+
+            // Sửa lỗi: Đảm bảo logic tải sách và phân tích được kích hoạt đúng
+            bookFileInput.addEventListener('change', handleBookUpload);
+            extractChaptersBtn.addEventListener('click', () => {
+                const contentForAI = rawBookContent.substring(0, MAX_AI_ANALYSIS_LENGTH);
+                if(rawBookContent) extractChapters(contentForAI);
+            });
+            // Các listener khác (giữ nguyên)
+            settingsToggle.addEventListener('click', () => {
+                const isHidden = advancedSettings.classList.contains('hidden');
+                if (isHidden) {
+                    advancedSettings.classList.remove('hidden');
+                    toggleIcon.textContent = '▲';
+                } else {
+                    advancedSettings.classList.add('hidden');
+                    toggleIcon.textContent = '▼';
+                }
+            });
+            bookToggle.addEventListener('click', () => {
+                const isHidden = bookAnalysisContent.classList.contains('hidden');
+                if (isHidden) {
+                    bookAnalysisContent.classList.remove('hidden');
+                    bookToggleIcon.textContent = '▲';
+                } else {
+                    bookAnalysisContent.classList.add('hidden');
+                    bookToggleIcon.textContent = '▼';
+                }
+            });
+
+            customPromptInput.addEventListener('input', savePrompt);
+            translationChunkSizeInput.addEventListener('change', saveChunkSize);
+
+            addApiKeyBtn.addEventListener('click', () => {
+                const key = newApiKeyInput.value.trim();
+                if (key && !geminiApiKeys.includes(key)) {
+                    geminiApiKeys.unshift(key);
+                    saveKeys();
+                    newApiKeyInput.value = '';
+                    newApiKeyInput.focus();
+                } else if (geminiApiKeys.includes(key)) {
+                    newApiKeyInput.value = '';
+                }
+            });
+            newApiKeyInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') addKey();
+            });
+            apiKeyList.addEventListener('click', (e) => {
+                if (e.target.classList.contains('delete-key-btn')) {
+                    const index = e.target.getAttribute('data-index');
+                    geminiApiKeys.splice(index, 1);
+                    saveKeys();
+                    translateText();
+                }
+            });
+            
+            dictionaryFileInput.addEventListener('change', () => {
+                uploadDictionaryBtn.disabled = !dictionaryFileInput.files.length;
+                uploadStatus.textContent = '';
+            });
+            uploadDictionaryBtn.addEventListener('click', () => {
+                const file = dictionaryFileInput.files[0];
+                if (!file) {
+                    uploadStatus.className = 'text-red-500 text-sm mt-2';
+                    uploadStatus.textContent = 'Vui lòng chọn một tệp để tải lên.';
+                    return;
+                }
+                uploadDictionaryBtn.disabled = true;
+                uploadStatus.className = 'text-gray-500 text-sm mt-2';
+                uploadStatus.textContent = 'Đang đọc tệp...';
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const content = e.target.result;
+                    const lines = content.split('\n').filter(line => line.trim() !== '');
+                    let newWordsCount = 0;
+                    lines.forEach(line => {
+                        const parts = line.split(/[,=]/).map(p => p.trim()).filter(p => p.length > 0);
+                        if (parts.length >= 2) {
+                            const han = parts[0];
+                            const viet = parts[1];
+                            if (addWord(han, viet)) { newWordsCount++; }
+                        }
+                    });
+                    saveDictionary();
+                    renderDictionary();
+                    uploadStatus.className = 'text-green-600 text-sm mt-2 font-semibold';
+                    uploadStatus.textContent = `Tải lên thành công! Đã thêm/cập nhật ${newWordsCount} từ.`;
+                    dictionaryFileInput.value = '';
+                    uploadDictionaryBtn.disabled = false;
+                };
+                reader.onerror = () => {
+                    uploadStatus.className = 'text-red-500 text-sm mt-2';
+                    uploadStatus.textContent = 'Lỗi khi đọc tệp.';
+                    uploadDictionaryBtn.disabled = false;
+                };
+                reader.readAsText(file);
+            });
+            
+            nextChapterBtn.addEventListener('click', goToNextChapter);
+
+            addWordBtn.addEventListener('click', () => {
+                if (addWord(hanInput.value.trim(), vietInput.value.trim())) {
+                    saveDictionary();
+                    renderDictionary();
+                    hanInput.value = '';
+                    vietInput.value = '';
+                    hanExplainOutput.classList.add('hidden');
+                    hanInput.focus();
+                }
+            });
+            dictionaryList.addEventListener('click', (e) => {
+                 if (e.target.classList.contains('delete-btn')) {
+                    const index = e.target.getAttribute('data-index');
+                    dictionary.splice(index, 1);
+                    saveDictionary();
+                    renderDictionary();
+                    translateText();
+                }
+            });
+            
+            addRuntimeSubstitutionBtn.addEventListener('click', () => {
+                const han = hanReplaceInput.value.trim();
+                const viet = vietNewValueInput.value.trim();
+                if (addRuntimeSubstitution(han, viet)) {
+                    hanReplaceInput.value = '';
+                    vietNewValueInput.value = '';
+                } else {
+                    console.error('Vui lòng điền đầy đủ Hán tự và Nghĩa Việt mới.');
+                }
+            });
+            runtimeSubstitutionList.addEventListener('click', (e) => {
+                if (e.target.classList.contains('delete-runtime-btn')) {
+                    const index = e.target.getAttribute('data-index');
+                    runtimeSubstitutions.splice(index, 1);
+                    renderRuntimeSubstitutions();
+                    translateText();
+                } else if (e.target.classList.contains('promote-btn')) {
+                    const han = e.target.getAttribute('data-han');
+                    const viet = e.target.getAttribute('data-viet');
+                    addWord(han, viet);
+                    saveDictionary();
+                    renderDictionary();
+                    runtimeSubstitutions = runtimeSubstitutions.filter(w => w.han !== han);
+                    renderRuntimeSubstitutions();
+                    translateText();
+                }
+            });
+            
+            addPostSubstitutionBtn.addEventListener('click', () => {
+                const oldVal = vietOldPostInput.value.trim();
+                const newVal = vietNewPostInput.value.trim();
+                if (addPostSubstitution(oldVal, newVal)) {
+                    vietOldPostInput.value = '';
+                    vietNewPostInput.value = '';
+                } else {
+                    console.error('Vui lòng điền đầy đủ Cụm từ Việt CŨ và Cụm từ Việt MỚI.');
+                }
+            });
+            postSubstitutionList.addEventListener('click', (e) => {
+                if (e.target.classList.contains('delete-post-btn')) {
+                    const index = e.target.getAttribute('data-index');
+                    deletePostSubstitution(index); 
+                    translateText();
+                }
+            });
+            
+            applyAllSubstitutionBtn.addEventListener('click', translateText);
+            
+            aiExplainBtn.addEventListener('click', async () => { 
+                const han = hanInput.value.trim();
+                if (!han) {
+                    hanExplainOutput.innerHTML = '<p class="text-red-500">Vui lòng nhập Hán tự để phân tích.</p>';
+                    hanExplainOutput.classList.remove('hidden');
+                    return;
+                }
+
+                aiExplainBtn.disabled = true;
+                aiExplainBtn.innerHTML = '<span class="spinner mr-2 w-4 h-4 border-white"></span> Đang phân tích...';
+                hanExplainOutput.classList.remove('hidden');
+                hanExplainOutput.innerHTML = `<div class="text-gray-500">Đang tải...</div>`;
+
+                const systemPrompt = DEFAULT_EXPLANATION_PROMPT;
+                const userQuery = `Phân tích chi tiết từ Hán tự/từ vựng: "${han}"`;
+
+                try {
+                    const { text: aiResult } = await callGeminiAPI(systemPrompt, userQuery);
+                    hanExplainOutput.innerHTML = `<h4 class="font-semibold text-indigo-700">Phân tích cho "${han}":</h4><p class="mt-1">${aiResult.replace(/\n/g, '<br>')}</p>`;
+                } catch (error) {
+                    hanExplainOutput.innerHTML = `<p class="text-red-500">Lỗi AI: ${error.message}</p>`;
+                } finally {
+                    aiExplainBtn.disabled = false;
+                    aiExplainBtn.innerHTML = '✨ Phân Tích';
+                }
+            });
+            aiTranslateBtn.addEventListener('click', fetchAITranslation);
+            translateBtn.addEventListener('click', translateText);
+            
+            clearBtn.addEventListener('click', () => {
+                chineseInput.value = '';
+                vietnameseOutput.innerHTML = '<p class="text-gray-400">Kết quả dịch sẽ được hiển thị ở đây...</p>';
+                lastManualTranslationOutput = '';
+                lastTranslatedChineseInput = '';
+            });
+
+            initialize();
+        });
+    </script>
+</body>
+</html>

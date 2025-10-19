@@ -1,0 +1,1564 @@
+<!-- Chosen Palette: Warm Neutrals & Subtle Blue/Green Accents -->
+<!-- Application Structure Plan: Dashboard Layout (Grid) for Edit Mode, Full-Screen Immersive for Reading Mode.
+- Row 1: Key Configuration (Novel Manager, Settings) - Two equal columns.
+- Row 2: Editing Workspace (Input/Tools) - Two columns (Tools on left, Input on right).
+- Row 3: Reading Pane (Result Output) - Single column, dynamically fills remaining screen height for maximum reading space.
+
+Rationale: This structure minimizes scrolling in the Edit Mode by placing tools side-by-side, while the Reading Mode maximizes focus by hiding all non-essential elements and dedicating the entire screen to the chapter content and a fixed control bar. This shift facilitates efficient batch editing/setup followed by comfortable reading/consumption.
+-->
+<!-- Visualization & Content Choices:
+- Novel List -> Goal: Organize -> Presentation: Interactive List (HTML Table/List) -> Interaction: Click to load/select -> Justification: Clear selection/management.
+- Translation Content -> Goal: Inform/Change -> Presentation: Text Output (HTML Div) -> Interaction: Real-time update, Post-substitution highlighting -> Justification: Core function, must be dynamic and clear.
+- Chapter Structure -> Goal: Organize -> Presentation: Modal List (HTML List) -> Interaction: Click to jump/Auto next/prev -> Justification: Non-linear navigation for large documents.
+- NO SVG/Mermaid used. Chart.js/Plotly not applicable as there is no numerical data or visualization required, only text processing and display.
+-->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Công cụ Dịch Hán Việt Cá nhân hóa</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#4f46e5',
+                        'secondary': '#10b981',
+                        'background-light': '#f9fafb',
+                        'card-bg': '#ffffff',
+                        'text-dark': '#1f2937',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f9fafb;
+            color: #1f2937;
+        }
+        /* Custom scrollbar for better look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* Style for highlighted Hán Việt words */
+        .han-viet-highlight {
+            background-color: #d1fae5; /* Green 100 */
+            font-weight: 600;
+            padding: 1px 2px;
+            border-radius: 2px;
+        }
+        /* Full-height container setup */
+        .full-page-container {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .main-content-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+        @media (min-width: 1024px) {
+            .main-content-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        .input-output-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        /* Ensure the final output box grows to fill remaining space */
+        #vietnamese-output-wrapper {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        #vietnamese-output {
+            flex-grow: 1;
+            height: 100%;
+            overflow-y: auto;
+        }
+        /* Reading Mode specific styles */
+        #reading-mode-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: var(--bg-color, #f9fafb); /* Dynamic background */
+            color: var(--text-color, #1f2937); /* Dynamic text color */
+            z-index: 50;
+            padding-bottom: 5rem; /* Space for the fixed footer */
+            display: none; /* Hidden by default */
+        }
+        #reading-content {
+            padding: 2rem 5%;
+            max-width: 800px;
+            margin: 0 auto;
+            overflow-y: auto;
+            max-height: calc(100vh - 100px); /* Adjust based on header/footer */
+            line-height: var(--line-height, 1.8); /* Dynamic line height */
+            font-size: var(--font-size, 16px); /* Dynamic font size */
+        }
+        .sticky-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #ffffff;
+            border-top: 1px solid #e5e7eb;
+            z-index: 60;
+            padding: 0.5rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .modal {
+            display: none;
+        }
+        .modal-content {
+            background-color: #ffffff;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+        }
+        /* Custom file input styling to hide default button and show custom button */
+        .custom-file-upload {
+            display: inline-block;
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 600;
+            text-align: center;
+            border: 1px solid #d1d5db;
+            background-color: #f3f4f6;
+            color: #4b5563;
+        }
+        .custom-file-upload:hover {
+            background-color: #e5e7eb;
+        }
+        .custom-file-upload input[type="file"] {
+            display: none;
+        }
+    </style>
+</head>
+<body class="full-page-container">
+
+    <!-- Modal for Novel Metadata Input -->
+    <div id="novel-metadata-modal" class="modal fixed inset-0 bg-black bg-opacity-50 z-50 items-center justify-center">
+        <div class="modal-content p-6 w-full max-w-lg">
+            <h2 class="text-xl font-bold mb-4 text-text-dark">Thêm Thông tin Truyện Mới</h2>
+            <input type="text" id="novel-title-input" placeholder="Tên Truyện" class="w-full p-2 mb-3 border border-gray-300 rounded-md">
+            <input type="text" id="novel-author-input" placeholder="Tên Tác Giả" class="w-full p-2 mb-3 border border-gray-300 rounded-md">
+            <textarea id="novel-description-input" placeholder="Giới thiệu/Mô tả ngắn" rows="3" class="w-full p-2 mb-4 border border-gray-300 rounded-md"></textarea>
+            
+            <h3 class="font-semibold text-gray-700 mt-4">Đánh dấu Chương:</h3>
+            <p class="text-sm text-gray-500 mb-2">Nhập chuỗi ký tự dùng để nhận biết chương mới (Ví dụ: `Chương 1` hoặc `第1章`).</p>
+            <input type="text" id="chapter-marker-input" placeholder="Chuỗi đánh dấu chương (Ví dụ: Chương)" value="Chương" class="w-full p-2 mb-4 border border-gray-300 rounded-md">
+            
+            <div class="flex justify-end space-x-3">
+                <button onclick="saveNovelMetadata()" class="bg-primary text-white p-2 rounded-md font-semibold hover:bg-indigo-600">Lưu & Tải truyện</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Chapter List (Used in Edit Mode & Reading Mode) -->
+    <div id="chapter-list-modal" class="modal fixed inset-0 bg-black bg-opacity-50 z-50 items-center justify-center">
+        <div class="modal-content p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <h2 class="text-xl font-bold mb-4 text-text-dark">Mục lục Truyện: <span id="modal-novel-title"></span></h2>
+            
+            <button onclick="editAllTitles()" id="edit-all-titles-btn" class="mb-4 p-2 bg-indigo-100 text-primary rounded-md font-semibold hover:bg-indigo-200 w-full">
+                <span class="mr-1">✍️</span> Chỉnh sửa/Dịch tiêu đề thủ công
+            </button>
+            
+            <div id="chapter-list-container" class="space-y-2 max-h-[70vh] overflow-y-auto p-2 border rounded-md">
+                <!-- Chapter list items will be injected here -->
+            </div>
+            <div class="flex justify-end mt-4">
+                <button onclick="closeModal('chapter-list-modal')" class="bg-gray-300 text-text-dark p-2 rounded-md font-semibold hover:bg-gray-400">Đóng</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal for Viet -> Viet Editing (Used in Reading Mode) -->
+    <div id="viet-viet-modal" class="modal fixed inset-0 bg-black bg-opacity-50 z-50 items-center justify-center">
+        <div class="modal-content p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h2 class="text-xl font-bold mb-4 text-text-dark">🔧 Tinh chỉnh Thuật ngữ (Việt -> Việt)</h2>
+            <div class="space-y-4">
+                <input type="text" id="vv-original-input" placeholder="Từ Việt Cũ (Cần thay thế)" class="w-full p-2 border border-gray-300 rounded-md">
+                <input type="text" id="vv-replacement-input" placeholder="Từ Việt Mới (Thay thế)" class="w-full p-2 border border-gray-300 rounded-md">
+                <button onclick="addVietVietRule(); closeModal('viet-viet-modal'); startHanVietTranslation(false);" class="bg-secondary text-white p-2 rounded-md font-semibold w-full hover:bg-emerald-600">Thêm & Áp dụng ngay</button>
+            </div>
+            <h3 class="font-semibold mt-6 mb-2">Danh sách Thuật ngữ đã lưu Vĩnh viễn:</h3>
+            <div id="vv-list-container" class="max-h-60 overflow-y-auto border p-3 rounded-md">
+                <!-- Viet-Viet rules will be injected here -->
+            </div>
+            <div class="flex justify-end mt-4">
+                <button onclick="closeModal('viet-viet-modal')" class="bg-gray-300 text-text-dark p-2 rounded-md font-semibold hover:bg-gray-400">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Reading Style Settings (Used in Reading Mode Taskbar) -->
+    <div id="style-settings-modal" class="modal fixed inset-0 bg-black bg-opacity-50 z-50 items-center justify-center">
+        <div class="modal-content p-6 w-full max-w-lg">
+            <h2 class="text-xl font-bold mb-4 text-text-dark">⚙️ Tùy chỉnh Giao diện Đọc</h2>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Cỡ chữ (px):</label>
+                    <input type="number" id="setting-font-size" onchange="saveReadingStyle()" min="12" max="30" class="w-full p-2 border rounded-md" value="16">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Chiều cao dòng:</label>
+                    <input type="number" id="setting-line-height" onchange="saveReadingStyle()" min="1.0" max="2.5" step="0.1" class="w-full p-2 border rounded-md" value="1.8">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Màu nền (Hex/Name):</label>
+                    <input type="text" id="setting-bg-color" onchange="saveReadingStyle()" class="w-full p-2 border rounded-md" value="#f9fafb">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Màu chữ (Hex/Name):</label>
+                    <input type="text" id="setting-text-color" onchange="saveReadingStyle()" class="w-full p-2 border rounded-md" value="#1f2937">
+                </div>
+            </div>
+            <div class="flex justify-end mt-6">
+                <button onclick="closeModal('style-settings-modal')" class="bg-gray-300 text-text-dark p-2 rounded-md font-semibold hover:bg-gray-400">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Reading Mode Container (Full Screen) -->
+    <div id="reading-mode-container" class="text-lg">
+        <header class="p-4 border-b border-gray-200 sticky top-0 bg-white shadow-md z-50">
+            <div class="max-w-4xl mx-auto flex justify-between items-center">
+                <button onclick="exitReadingMode()" class="px-4 py-2 bg-gray-200 rounded-md text-sm font-semibold hover:bg-gray-300">&larr; Trở lại Biên tập</button>
+                <h1 id="reading-chapter-title" class="text-xl font-bold text-center text-text-dark truncate max-w-sm sm:max-w-lg"></h1>
+                <div class="flex space-x-2">
+                    <button onclick="navigateChapter(-1)" class="p-2 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-50" id="prev-chapter-btn-read" title="Chương trước">&lt;</button>
+                    <button onclick="navigateChapter(1)" class="p-2 bg-gray-100 rounded-full hover:bg-gray-200 disabled:opacity-50" id="next-chapter-btn-read" title="Chương tiếp theo">&gt;</button>
+                </div>
+            </div>
+        </header>
+        <div id="reading-content" class="text-base">
+            <!-- Dịch hoàn chỉnh sẽ được đưa vào đây -->
+        </div>
+
+        <!-- Sticky Footer Taskbar for Reading Mode -->
+        <footer id="reading-footer" class="sticky-footer">
+            <div class="flex items-center space-x-4">
+                <button onclick="openModal('chapter-list-modal'); renderChapterList('chapter-list-container');" class="p-2 text-sm font-semibold rounded-md bg-secondary text-white hover:bg-emerald-600">
+                    <span class="mr-2">📚</span> Mục lục
+                </button>
+                <button onclick="openModal('style-settings-modal')" class="p-2 text-sm font-semibold rounded-md bg-gray-100 hover:bg-gray-200">
+                    <span class="mr-2">🎨</span> Tùy chỉnh Đọc
+                </button>
+                <button onclick="openModal('viet-viet-modal'); renderVietVietRules('vv-list-container', true);" class="p-2 text-sm font-semibold rounded-md bg-gray-100 hover:bg-gray-200">
+                    <span class="mr-2">🔧</span> Thuật ngữ
+                </button>
+                <button onclick="downloadChapter()" class="p-2 text-sm font-semibold rounded-md bg-gray-100 hover:bg-gray-200">
+                    <span class="mr-2">⬇️</span> Tải Chương
+                </button>
+                <button onclick="downloadBook()" class="p-2 text-sm font-semibold rounded-md bg-gray-100 hover:bg-gray-200">
+                    <span class="mr-2">⬇️</span> Tải Toàn bộ
+                </button>
+            </div>
+            <div id="reading-status" class="text-sm font-medium text-indigo-600">
+                <!-- Trạng thái dịch sẽ hiển thị ở đây -->
+            </div>
+            <button onclick="startAITranslation()" class="px-4 py-2 text-sm font-semibold rounded-md bg-primary text-white hover:bg-indigo-600">
+                <span class="mr-2">🔄</span> Dịch lại Chương
+            </button>
+        </footer>
+    </div>
+    
+    <!-- Main Editing Container -->
+    <main class="container mx-auto p-4 flex-grow" id="edit-mode-container">
+        <h1 class="text-3xl font-bold mb-4 text-center text-text-dark">Công cụ Dịch Hán Việt Cá nhân hóa (Local Storage)</h1>
+        
+        <!-- CẢNH BÁO LOCAL STORAGE -->
+        <div id="storage-warning" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-md" role="alert">
+            <p class="font-bold">CẢNH BÁO LƯU TRỮ CỤC BỘ:</p>
+            <p class="text-sm">Ứng dụng đang sử dụng **Lưu trữ Cục bộ (Local Storage)**. Dữ liệu (Truyện, Chương đã dịch) được lưu trên trình duyệt này và **KHÔNG** chia sẻ được giữa các thiết bị/trình duyệt khác. Hãy sử dụng tính năng Tải xuống để sao lưu.</p>
+        </div>
+
+        <!-- HÀNG 1: CẤU HÌNH (Quản lý truyện & Cài đặt) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            
+            <!-- Quản lý Truyện (Giao diện đơn giản) -->
+            <div class="bg-card-bg p-6 rounded-xl shadow-lg border border-gray-200">
+                <h2 class="text-xl font-bold mb-4 text-primary">📑 Tải lên Sách & Phân tích Chương</h2>
+                <p class="text-gray-600 mb-4">Tải lên tệp (.txt) chứa toàn bộ nội dung truyện tiếng Trung.</p>
+                
+                <div class="flex space-x-2">
+                    <label class="custom-file-upload flex-1">
+                        <input type="file" id="book-upload" accept=".txt">
+                        Chọn Tệp Sách...
+                    </label>
+                    <button id="extract-chapters-btn" onclick="startChapterAnalysis()" class="flex-1 p-2 bg-primary text-white rounded-md font-semibold hover:bg-indigo-600 disabled:opacity-50" disabled>
+                        <span class="mr-1">✨</span> AI Phân tích & Dịch Tiêu đề
+                    </button>
+                </div>
+                
+                <!-- Hiển thị thông tin truyện đang hoạt động -->
+                <div id="current-novel-info" class="mt-4 p-3 bg-gray-50 border rounded-md hidden">
+                    <div class="flex justify-between items-center">
+                        <p class="text-sm font-medium text-text-dark">Đang làm việc: <span id="current-novel-title" class="font-semibold text-primary">Chưa tải</span></p>
+                        <button onclick="deleteNovel()" class="text-red-500 hover:text-red-700 text-xs font-semibold" id="delete-novel-btn">Xóa Truyện</button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Tổng Chương: <span id="total-chapters">0</span> | Đã dịch: <span id="translated-chapters">0</span></p>
+                </div>
+                
+                <!-- Nút Mục lục cho các truyện đã lưu -->
+                <div class="mt-4 border-t pt-4">
+                    <button onclick="openModal('chapter-list-modal'); renderNovelManagerModal();" class="w-full p-2 bg-gray-200 text-text-dark rounded-md font-semibold hover:bg-gray-300">
+                        📚 Mục lục Truyện đã Lưu
+                    </button>
+                </div>
+
+                <div id="chapter-nav-display" class="mt-4 p-3 bg-gray-50 border rounded-md hidden">
+                    <p class="text-sm font-medium text-text-dark">Đang xem: <span id="current-chapter-title" class="font-semibold text-primary"></span></p>
+                    <button onclick="openModal('chapter-list-modal'); renderChapterList('chapter-list-container');" class="mt-2 text-sm text-primary font-semibold hover:underline">Xem Mục lục chi tiết</button>
+                </div>
+            </div>
+
+            <!-- Cài đặt Nâng cao -->
+            <div class="bg-card-bg p-6 rounded-xl shadow-lg border border-gray-200">
+                <h2 class="text-xl font-bold mb-4 text-primary">⚙️ Cài đặt Nâng cao (API & Prompt)</h2>
+                <div class="space-y-4">
+                    
+                    <div>
+                        <h3 class="font-semibold text-gray-700 mb-1">Quản lý API Keys</h3>
+                        <div class="flex space-x-2 mb-2">
+                            <input type="text" id="api-key-input" placeholder="Nhập Gemini API Key" class="flex-grow p-2 border border-gray-300 rounded-md">
+                            <button onclick="addApiKey()" class="bg-secondary text-white p-2 rounded-md font-semibold hover:bg-emerald-600">Thêm Khóa</button>
+                        </div>
+                        <div id="api-key-list" class="text-xs space-y-1 max-h-24 overflow-y-auto p-1 border rounded-md bg-gray-50">
+                            <!-- Keys will be listed here -->
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Các khóa sẽ được tự động lưu và xoay vòng khi có lỗi.</p>
+                    </div>
+
+                    <div>
+                        <h3 class="font-semibold text-gray-700 mb-1">Cấu hình Dịch Thuật</h3>
+                        <input type="number" id="chunk-size-input" onchange="saveGeneralSettings()" placeholder="Kích thước đoạn dịch (ký tự, mặc định 3000)" class="w-full p-2 border border-gray-300 rounded-md" value="3000">
+                        <p class="text-xs text-gray-500">Kích thước tối ưu cho mỗi lần gọi API.</p>
+                    </div>
+
+                    <div>
+                        <h3 class="font-semibold text-gray-700 mb-1">Custom Prompt</h3>
+                        <textarea id="system-prompt-input" onchange="saveGeneralSettings()" rows="3" placeholder="Yêu cầu đặc biệt cho AI (ví dụ: 'Dịch theo phong cách kiếm hiệp cổ trang...')" class="w-full p-2 border border-gray-300 rounded-md"></textarea>
+                        <p class="text-xs text-gray-500">Tự động lưu. Điều chỉnh phong cách và giọng điệu bản dịch cuối cùng.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- HÀNG 2: KHU VỰC LÀM VIỆC (Tools & Input) -->
+        <div class="main-content-grid">
+            
+            <!-- CỘT TRÁI: CÔNG CỤ TINH CHỈNH VÀ TỪ ĐIỂN -->
+            <div class="space-y-6">
+                
+                <!-- 1. Hán -> Việt Tinh chỉnh Tạm thời -->
+                <div class="bg-card-bg p-6 rounded-xl shadow-lg border border-gray-200">
+                    <h2 class="text-xl font-bold mb-4 text-primary">1. Hán -> Việt (Tinh chỉnh Tạm thời)</h2>
+                    <div class="space-y-3">
+                        <input type="text" id="han-original-input" placeholder="Hán tự gốc (Ví dụ: '道')" class="w-full p-2 border border-gray-300 rounded-md">
+                        <input type="text" id="han-replacement-input" placeholder="Nghĩa Việt mới (Ví dụ: 'Đạo')" class="w-full p-2 border border-gray-300 rounded-md">
+                        <button onclick="addHanVietTempRule()" class="bg-secondary text-white p-2 rounded-md font-semibold w-full hover:bg-emerald-600">Thêm vào Danh sách Tạm</button>
+                    </div>
+                    <div id="han-viet-temp-list" class="mt-4 space-y-2 max-h-32 overflow-y-auto p-1 border rounded-md">
+                        <!-- Temporary Han-Viet rules will be injected here -->
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">Các tinh chỉnh này chỉ được áp dụng khi bạn nhấn "Áp dụng & Dịch lại".</p>
+                </div>
+
+                <!-- 2. Việt -> Việt (Hậu kỳ) - Lưu Vĩnh Viễn -->
+                <div class="bg-card-bg p-6 rounded-xl shadow-lg border border-gray-200">
+                    <h2 class="text-xl font-bold mb-4 text-primary">2. Việt -> Việt (Hậu kỳ) - Lưu Vĩnh Viễn</h2>
+                    <div class="space-y-3">
+                        <input type="text" id="vv-original-input-edit" placeholder="Từ Việt Cũ (Cần thay thế)" class="w-full p-2 border border-gray-300 rounded-md">
+                        <input type="text" id="vv-replacement-input-edit" placeholder="Từ Việt Mới (Thay thế)" class="w-full p-2 border border-gray-300 rounded-md">
+                        <button onclick="addVietVietRule()" class="bg-secondary text-white p-2 rounded-md font-semibold w-full hover:bg-emerald-600">Thêm & Lưu Vĩnh viễn</button>
+                    </div>
+                    <h3 class="font-semibold mt-4 mb-2 text-gray-700">Danh sách Thuật ngữ đã lưu:</h3>
+                    <div id="vv-list-container-edit" class="max-h-32 overflow-y-auto border p-3 rounded-md">
+                        <!-- Viet-Viet rules will be injected here -->
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">Các quy tắc này được lưu vĩnh viễn và áp dụng cho mọi chương.</p>
+                </div>
+
+                <!-- Từ điển Cá nhân (Hán -> Việt Vĩnh Viễn) -->
+                <div class="bg-card-bg p-6 rounded-xl shadow-lg border border-gray-200">
+                    <h2 class="text-xl font-bold mb-4 text-primary">📖 Từ điển Hán Việt của bạn (Vĩnh Viễn)</h2>
+                    <div class="flex space-x-2">
+                         <input type="file" id="dict-upload" accept=".txt,.csv" class="flex-grow block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-200 file:text-gray-700 hover:file:bg-gray-300">
+                        <button onclick="downloadDictionary()" class="p-2 bg-gray-200 rounded-md font-semibold text-gray-700 hover:bg-gray-300 text-sm whitespace-nowrap">Tải xuống</button>
+                    </div>
+                    <div id="dictionary-list" class="mt-4 space-y-1 max-h-40 overflow-y-auto p-2 border rounded-md bg-gray-50">
+                        <!-- Dictionary entries will be injected here -->
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">Các cặp từ này được lưu vĩnh viễn và dùng làm nền tảng dịch Hán Việt.</p>
+                </div>
+
+            </div>
+
+            <!-- CỘT PHẢI: KHU VỰC NHẬP VÀ XỬ LÝ DỊCH -->
+            <div class="flex flex-col space-y-4">
+                <div class="bg-card-bg p-6 rounded-xl shadow-lg border border-gray-200 h-full flex flex-col">
+                    <h2 class="text-xl font-bold mb-4 text-primary">Công cụ Dịch & Nội dung Chương</h2>
+                    <textarea id="chinese-input" rows="8" placeholder="Dán văn bản tiếng Trung (nội dung chương) vào đây hoặc chọn một chương từ Mục lục..." class="w-full p-3 border border-gray-300 rounded-md text-base flex-grow font-mono"></textarea>
+                    
+                    <div class="mt-4 flex flex-col space-y-3">
+                        <button onclick="startHanVietTranslation()" class="w-full p-3 bg-indigo-200 text-primary rounded-md font-semibold hover:bg-indigo-300 disabled:opacity-50" id="han-viet-translate-btn">
+                            Áp dụng & Dịch Hán Việt (Batch Apply)
+                        </button>
+                        <button onclick="startAITranslation()" class="w-full p-3 bg-primary text-white rounded-md font-semibold hover:bg-indigo-600 disabled:opacity-50" id="ai-translate-btn">
+                            <span class="mr-1">✨</span> AI Dịch Hoàn Chỉnh & Trôi Chảy
+                        </button>
+                    </div>
+                    <div id="translation-progress" class="mt-3 text-sm text-center text-indigo-600 hidden">Đang chia đoạn và dịch song song...</div>
+                    <div id="error-message" class="mt-3 text-sm text-red-600 text-center hidden p-2 bg-red-100 rounded-md"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- HÀNG 3: KẾT QUẢ DỊCH (Trải rộng hết trang) -->
+        <div id="vietnamese-output-wrapper" class="mt-6">
+            <h2 class="text-xl font-bold mb-3 text-text-dark">Kết quả Dịch thuật:</h2>
+            <div id="vietnamese-output" class="bg-card-bg p-6 rounded-xl shadow-lg border border-gray-200 overflow-y-auto text-base">
+                <p class="text-gray-500">Kết quả dịch sẽ hiển thị ở đây. Vui lòng tải sách, chọn chương hoặc dán văn bản để bắt đầu.</p>
+            </div>
+        </div>
+        
+    </main>
+
+    <script>
+        const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=";
+        const HAN_VIET_DICT_KEY = 'hanVietDictionary';
+        const VIET_VIET_RULES_KEY = 'vietVietRules';
+        const API_KEYS_KEY = 'geminiApiKeys';
+        const GENERAL_SETTINGS_KEY = 'generalSettings';
+        const NOVEL_DATA_KEY = 'novelManagerData';
+        const READING_STYLE_KEY = 'readingStyle';
+
+        const MAX_AI_ANALYSIS_LENGTH = 200000; // Phân tích chương
+        const MAX_BOOK_CONTENT_LENGTH = 20000000;
+        const MAX_API_RETRIES = 5; 
+        const API_CALL_DELAY_MS = 500; 
+        const JSON_API_DELAY_MS = 750; // Độ trễ cao hơn cho các lệnh gọi JSON phức tạp (phân tích chương)
+
+        let hanVietDictionary = {};
+        let vietVietRules = [];
+        let apiKeys = [];
+        let generalSettings = { prompt: "Dịch văn bản tiếng Trung sau đây sang tiếng Việt. Hãy giữ nguyên nghĩa và tạo ra một bản dịch trôi chảy, tự nhiên. Trả lời bằng văn bản thuần túy tiếng Việt, không thêm lời giải thích hay bất kỳ nội dung nào khác.", chunkSize: 3000 };
+        let hanVietTempRules = {}; 
+        let novelManagerData = {}; 
+        let appState = {
+            selectedNovelId: null,
+            selectedChapterIndex: null,
+            currentChapterContent: "",
+            currentHanVietOutput: "",
+            isReadingMode: false,
+            readingStyle: { fontSize: 16, lineHeight: 1.8, bgColor: '#f9fafb', textColor: '#1f2937' }
+        };
+
+        // --- CORE UTILITIES ---
+
+        function getAppState() {
+            return JSON.parse(localStorage.getItem('appState')) || appState;
+        }
+
+        function saveAppState() {
+            localStorage.setItem('appState', JSON.stringify(appState));
+        }
+
+        function loadFromLocalStorage() {
+            // Load all persistent data
+            hanVietDictionary = JSON.parse(localStorage.getItem(HAN_VIET_DICT_KEY)) || {};
+            vietVietRules = JSON.parse(localStorage.getItem(VIET_VIET_RULES_KEY)) || [];
+            apiKeys = JSON.parse(localStorage.getItem(API_KEYS_KEY)) || [];
+            generalSettings = JSON.parse(localStorage.getItem(GENERAL_SETTINGS_KEY)) || generalSettings;
+            novelManagerData = JSON.parse(localStorage.getItem(NOVEL_DATA_KEY)) || {};
+
+            // Load App State
+            const savedState = getAppState();
+            appState = { ...appState, ...savedState };
+
+            // Load Reading Style and apply immediately
+            appState.readingStyle = JSON.parse(localStorage.getItem(READING_STYLE_KEY)) || appState.readingStyle;
+            applyReadingStyle();
+
+            // Render UI components
+            renderDictionary();
+            renderVietVietRules('vv-list-container-edit', false);
+            renderApiKeys();
+            loadGeneralSettingsUI();
+            
+            // Render Novel Manager Info
+            updateNovelInfoDisplay();
+            if (appState.selectedNovelId && novelManagerData[appState.selectedNovelId]) {
+                loadSelectedNovel();
+            }
+
+            // Bind Event Listeners
+            document.getElementById('book-upload').addEventListener('change', handleBookUpload);
+            document.getElementById('dict-upload').addEventListener('change', handleDictionaryUpload);
+            document.getElementById('api-key-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') addApiKey();
+            });
+
+            // Initial UI Setup
+            updateUIState();
+        }
+
+        function saveGeneralSettings() {
+            generalSettings.prompt = document.getElementById('system-prompt-input').value;
+            generalSettings.chunkSize = parseInt(document.getElementById('chunk-size-input').value) || 3000;
+            localStorage.setItem(GENERAL_SETTINGS_KEY, JSON.stringify(generalSettings));
+        }
+
+        function loadGeneralSettingsUI() {
+            document.getElementById('system-prompt-input').value = generalSettings.prompt;
+            document.getElementById('chunk-size-input').value = generalSettings.chunkSize;
+        }
+
+        function updateUIState() {
+            const isNovelLoaded = appState.selectedNovelId && novelManagerData[appState.selectedNovelId];
+            
+            // Cập nhật trạng thái hiển thị
+            updateNovelInfoDisplay();
+
+            // Enable/Disable buttons based on novel state
+            document.getElementById('extract-chapters-btn').disabled = !isNovelLoaded; 
+            document.getElementById('han-viet-translate-btn').disabled = !isNovelLoaded && !document.getElementById('chinese-input').value.trim();
+            document.getElementById('ai-translate-btn').disabled = !isNovelLoaded && !document.getElementById('chinese-input').value.trim();
+
+            const chapterNavDisplay = document.getElementById('chapter-nav-display');
+            if (isNovelLoaded && novelManagerData[appState.selectedNovelId].chapters.length > 0) {
+                chapterNavDisplay.classList.remove('hidden');
+            } else {
+                chapterNavDisplay.classList.add('hidden');
+            }
+
+            if (appState.isReadingMode) {
+                document.getElementById('edit-mode-container').style.display = 'none';
+                document.getElementById('reading-mode-container').style.display = 'block';
+                applyReadingStyle();
+            } else {
+                document.getElementById('edit-mode-container').style.display = 'block';
+                document.getElementById('reading-mode-container').style.display = 'none';
+            }
+        }
+
+        // --- API KEY MANAGEMENT ---
+
+        function addApiKey() {
+            const keyInput = document.getElementById('api-key-input');
+            const newKey = keyInput.value.trim();
+            if (newKey && !apiKeys.includes(newKey)) {
+                apiKeys.push(newKey);
+                localStorage.setItem(API_KEYS_KEY, JSON.stringify(apiKeys));
+                keyInput.value = '';
+                renderApiKeys();
+            }
+        }
+
+        function removeApiKey(key) {
+            apiKeys = apiKeys.filter(k => k !== key);
+            localStorage.setItem(API_KEYS_KEY, JSON.stringify(apiKeys));
+            renderApiKeys();
+        }
+
+        function renderApiKeys() {
+            const listContainer = document.getElementById('api-key-list');
+            listContainer.innerHTML = apiKeys.map(key => `
+                <div class="flex justify-between items-center bg-white p-1 rounded-md">
+                    <span class="truncate">...${key.slice(-4)}</span>
+                    <button onclick="removeApiKey('${key}')" class="text-red-500 hover:text-red-700 text-xs ml-2">Xóa</button>
+                </div>
+            `).join('');
+            if (apiKeys.length === 0) {
+                listContainer.innerHTML = '<p class="text-gray-400 p-2 text-center">Chưa có Khóa API nào được lưu.</p>';
+            }
+        }
+
+
+        // --- NOVEL MANAGEMENT ---
+
+        function updateNovelInfoDisplay() {
+            const infoDiv = document.getElementById('current-novel-info');
+            const novel = appState.selectedNovelId ? novelManagerData[appState.selectedNovelId] : null;
+
+            if (novel) {
+                infoDiv.classList.remove('hidden');
+                document.getElementById('current-novel-title').textContent = novel.metadata.title;
+                document.getElementById('total-chapters').textContent = novel.chapters.length;
+                
+                const translatedCount = Object.keys(novel.translations).length;
+                document.getElementById('translated-chapters').textContent = translatedCount;
+                document.getElementById('delete-novel-btn').classList.remove('hidden');
+            } else {
+                infoDiv.classList.add('hidden');
+                document.getElementById('delete-novel-btn').classList.add('hidden');
+            }
+        }
+
+        function renderNovelManagerModal() {
+            const container = document.getElementById('chapter-list-container');
+            container.innerHTML = ' '; // Clear previous chapter list
+
+            const novelIds = Object.keys(novelManagerData);
+
+            if (novelIds.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500">Bạn chưa tải lên truyện nào. Vui lòng tải truyện mới ở trang chính.</p>';
+                return;
+            }
+
+            const listHtml = novelIds.map(id => {
+                const novel = novelManagerData[id];
+                const isSelected = id === appState.selectedNovelId;
+                const translatedCount = Object.keys(novel.translations).length;
+                
+                return `
+                    <div class="p-3 border rounded-md ${isSelected ? 'bg-indigo-100 border-indigo-600' : 'bg-white'} flex justify-between items-center hover:bg-indigo-50 cursor-pointer" onclick="loadNovelFromModal('${id}')">
+                        <div>
+                            <p class="font-semibold text-text-dark">${novel.metadata.title}</p>
+                            <p class="text-xs text-gray-500">Tác giả: ${novel.metadata.author || 'Vô danh'} | Chương: ${novel.chapters.length} | Đã dịch: ${translatedCount}</p>
+                        </div>
+                        ${isSelected ? '<span class="text-xs font-bold text-indigo-600">Đang hoạt động</span>' : ''}
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = listHtml;
+            document.getElementById('edit-all-titles-btn').classList.add('hidden'); // Hide edit title button in novel list view
+        }
+
+        function loadNovelFromModal(novelId) {
+            appState.selectedNovelId = novelId;
+            appState.selectedChapterIndex = null;
+            saveAppState();
+            loadSelectedNovel();
+            closeModal('chapter-list-modal');
+        }
+
+
+        function loadSelectedNovel() {
+            const novelId = appState.selectedNovelId;
+            const novel = novelManagerData[novelId];
+
+            if (novel) {
+                document.getElementById('current-novel-title').textContent = novel.metadata.title;
+                
+                if (novel.chapters.length > 0) {
+                    // Load first chapter if available and not set
+                    if (appState.selectedChapterIndex === null || appState.selectedChapterIndex >= novel.chapters.length) {
+                        selectChapter(0);
+                    } else if (appState.selectedChapterIndex !== null) {
+                        selectChapter(appState.selectedChapterIndex); // Reload current chapter
+                    }
+                } else {
+                    document.getElementById('chinese-input').value = novel.rawContent; 
+                    document.getElementById('vietnamese-output').innerHTML = '<p class="text-gray-500">Đã tải nội dung truyện. Vui lòng nhấn "AI Phân tích & Dịch Tiêu đề" để xác định các chương.</p>';
+                    appState.currentChapterContent = novel.rawContent;
+                }
+            } else {
+                appState.selectedNovelId = null;
+                appState.selectedChapterIndex = null;
+                appState.currentHanVietOutput = "";
+                document.getElementById('chinese-input').value = '';
+                document.getElementById('vietnamese-output').innerHTML = '<p class="text-gray-500">Vui lòng chọn hoặc tải lên một truyện.</p>';
+                appState.currentChapterContent = "";
+            }
+            saveAppState();
+            updateUIState();
+        }
+        
+        function deleteNovel() {
+            if (!appState.selectedNovelId || !confirm(`Bạn có chắc chắn muốn xóa truyện "${novelManagerData[appState.selectedNovelId].metadata.title}" và toàn bộ bản dịch đã lưu?`)) {
+                return;
+            }
+
+            delete novelManagerData[appState.selectedNovelId];
+            localStorage.setItem(NOVEL_DATA_KEY, JSON.stringify(novelManagerData));
+            appState.selectedNovelId = null;
+            appState.selectedChapterIndex = null;
+            appState.currentHanVietOutput = "";
+            
+            updateUIState();
+            document.getElementById('chinese-input').value = '';
+            document.getElementById('vietnamese-output').innerHTML = '<p class="text-gray-500">Đã xóa truyện. Vui lòng tải truyện mới.</p>';
+        }
+
+        // --- BOOK UPLOAD & METADATA ---
+        
+        function handleBookUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.size > MAX_BOOK_CONTENT_LENGTH) {
+                alert(`Lỗi: Kích thước tệp quá lớn (${(file.size / 1024 / 1024).toFixed(2)} MB). Giới hạn là ${(MAX_BOOK_CONTENT_LENGTH / 1024 / 1024).toFixed(2)} MB.`);
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const rawContent = e.target.result;
+                document.getElementById('chinese-input').value = rawContent;
+                document.getElementById('novel-title-input').value = file.name.replace(/\.[^/.]+$/, ""); // Pre-fill title
+                openModal('novel-metadata-modal');
+                // Store raw content temporarily
+                document.getElementById('novel-metadata-modal').dataset.rawContent = rawContent;
+            };
+            reader.readAsText(file, 'UTF-8');
+        }
+
+        function saveNovelMetadata() {
+            const title = document.getElementById('novel-title-input').value.trim();
+            const author = document.getElementById('novel-author-input').value.trim();
+            const description = document.getElementById('novel-description-input').value.trim();
+            const rawContent = document.getElementById('novel-metadata-modal').dataset.rawContent;
+            const chapterMarker = document.getElementById('chapter-marker-input').value.trim() || "Chương";
+
+            if (!title || !rawContent) {
+                alert("Vui lòng nhập Tên Truyện.");
+                return;
+            }
+
+            const novelId = crypto.randomUUID();
+            // Sử dụng manual extraction để tạo cấu trúc chương ban đầu (chỉ để xác định startMarker)
+            const chapters = extractChaptersManually(rawContent, chapterMarker); 
+
+            novelManagerData[novelId] = {
+                metadata: { title, author, description, uploadedAt: new Date().toISOString(), chapterMarker: chapterMarker },
+                rawContent: rawContent,
+                chapters: chapters,
+                translations: {}
+            };
+            localStorage.setItem(NOVEL_DATA_KEY, JSON.stringify(novelManagerData));
+            
+            closeModal('novel-metadata-modal');
+            appState.selectedNovelId = novelId;
+            appState.selectedChapterIndex = null;
+            appState.currentHanVietOutput = "";
+            saveAppState();
+            updateUIState();
+            
+            // Auto start AI analysis for chapters
+            startChapterAnalysis();
+        }
+
+
+        // --- CHAPTER EXTRACTION (AI & MANUAL) ---
+        
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function extractChaptersManually(rawContent, marker) {
+            if (!marker) return [];
+
+            const safeMarker = escapeRegExp(marker);
+            const chapterRegex = new RegExp(`(${safeMarker}\\s*\\d+.*?)(?:\n|$)`, 'g'); 
+            
+            const chapters = [];
+            let match;
+
+            while ((match = chapterRegex.exec(rawContent)) !== null) {
+                const markerText = match[1].trim(); 
+                const startIndex = match.index;
+
+                chapters.push({
+                    startMarker: markerText, 
+                    startIndex: startIndex,
+                    title_cn: markerText, 
+                    title_vi: markerText  
+                });
+            }
+
+            if (chapters.length === 0) {
+                 return [{ 
+                    startMarker: rawContent.substring(0, 50).trim() + "...", 
+                    startIndex: 0,
+                    title_cn: "CHƯƠNG ĐẦU TIÊN (Không có dấu chương)", 
+                    title_vi: "CHƯƠNG ĐẦU TIÊN (Không có dấu chương)"
+                }];
+            }
+            
+            return chapters;
+        }
+
+        function getChapterContent(novel, index) {
+            const chapters = novel.chapters;
+            if (index < 0 || index >= chapters.length) return "";
+
+            const startMarker = chapters[index].startMarker;
+            const startIndex = novel.rawContent.indexOf(startMarker);
+
+            if (startIndex === -1) return "";
+
+            let endIndex = novel.rawContent.length;
+            if (index < chapters.length - 1) {
+                const nextStartMarker = chapters[index + 1].startMarker;
+                const nextStartIndex = novel.rawContent.indexOf(nextStartMarker, startIndex + startMarker.length);
+                if (nextStartIndex !== -1) {
+                    endIndex = nextStartIndex;
+                }
+            }
+            return novel.rawContent.substring(startIndex, endIndex).trim();
+        }
+
+        function selectChapter(index) {
+            const novel = novelManagerData[appState.selectedNovelId];
+            if (!novel || index < 0 || index >= novel.chapters.length) return;
+
+            appState.selectedChapterIndex = index;
+            appState.currentHanVietOutput = ""; 
+            saveAppState();
+
+            const chapterTitle = novel.chapters[index].title_vi || novel.chapters[index].title_cn;
+            document.getElementById('current-chapter-title').textContent = `STT ${index + 1}. ${chapterTitle}`;
+            
+            const chapterKey = `chapter_${index}`;
+            appState.currentChapterContent = getChapterContent(novel, index);
+
+            if (novel.translations[chapterKey]) {
+                document.getElementById('chinese-input').value = appState.currentChapterContent;
+                document.getElementById('vietnamese-output').innerHTML = novel.translations[chapterKey].translatedText;
+                document.getElementById('ai-translate-btn').disabled = false; 
+            } else {
+                document.getElementById('chinese-input').value = appState.currentChapterContent;
+                document.getElementById('vietnamese-output').innerHTML = `<p class="text-gray-500">Đã tải Chương ${index + 1}. Vui lòng nhấn "Áp dụng & Dịch Hán Việt" hoặc "AI Dịch Hoàn Chỉnh".</p>`;
+                document.getElementById('ai-translate-btn').disabled = false;
+            }
+            updateUIState();
+            hanVietTempRules = {};
+            renderHanVietTempRules();
+        }
+
+        function renderChapterList(containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            const novel = novelManagerData[appState.selectedNovelId];
+            if (!novel) {
+                 container.innerHTML = '<p class="text-center text-gray-500">Vui lòng tải lên một truyện để xem Mục lục.</p>';
+                 return;
+            }
+
+            document.getElementById('modal-novel-title').textContent = novel.metadata.title;
+            document.getElementById('edit-all-titles-btn').classList.remove('hidden'); // Show edit title button when chapter list is rendered
+
+            novel.chapters.forEach((chapter, index) => {
+                const isTranslated = !!novel.translations[`chapter_${index}`];
+                const isSelected = index === appState.selectedChapterIndex;
+                const chapterTitle = chapter.title_vi || chapter.title_cn;
+
+                const statusIcon = isTranslated ? '✅' : '⏳';
+                const statusColor = isTranslated ? 'text-emerald-600' : 'text-gray-500';
+
+                const div = document.createElement('div');
+                div.className = `chapter-item flex justify-between items-center p-3 rounded-lg cursor-pointer hover:bg-indigo-50 ${isSelected ? 'bg-indigo-100 border-l-4 border-indigo-600' : 'bg-white'}`;
+                div.setAttribute('data-index', index);
+                
+                div.innerHTML = `
+                    <div class="flex flex-col flex-grow">
+                        <span class="font-semibold text-text-dark">STT ${index + 1}. ${chapterTitle}</span>
+                        <span class="text-xs text-gray-500 italic">(${chapter.title_cn})</span>
+                    </div>
+                    <span class="${statusColor} text-sm font-medium">${statusIcon}</span>
+                `;
+                div.onclick = () => {
+                    selectChapter(index);
+                    closeModal('chapter-list-modal');
+                };
+                container.appendChild(div);
+            });
+        }
+        
+        function editAllTitles() {
+            const novel = novelManagerData[appState.selectedNovelId];
+            if (!novel) return;
+
+            const container = document.getElementById('chapter-list-container');
+            container.innerHTML = ''; 
+
+            novel.chapters.forEach((chapter, index) => {
+                const div = document.createElement('div');
+                div.className = 'p-3 border-b border-gray-100';
+                div.innerHTML = `
+                    <label class="block text-sm font-medium text-gray-700">STT ${index + 1}. Tiêu đề Dịch:</label>
+                    <input type="text" id="title-vi-${index}" value="${chapter.title_vi || chapter.title_cn}" class="w-full p-2 border rounded-md text-sm mb-1">
+                    <p class="text-xs text-gray-500 italic">Marker Gốc: ${chapter.startMarker}</p>
+                `;
+                container.appendChild(div);
+            });
+
+            // Replace the 'Edit' button with a 'Save' button temporarily
+            const originalButton = document.getElementById('edit-all-titles-btn');
+            originalButton.textContent = '💾 Lưu Tiêu đề đã Chỉnh sửa';
+            originalButton.onclick = saveAllTitles;
+        }
+
+        function saveAllTitles() {
+            const novel = novelManagerData[appState.selectedNovelId];
+            if (!novel) return;
+
+            novel.chapters.forEach((chapter, index) => {
+                const input = document.getElementById(`title-vi-${index}`);
+                if (input) {
+                    chapter.title_vi = input.value.trim();
+                }
+            });
+
+            localStorage.setItem(NOVEL_DATA_KEY, JSON.stringify(novelManagerData));
+            alert("Đã lưu các tiêu đề chương mới!");
+
+            // Restore the original button and list view
+            const originalButton = document.getElementById('edit-all-titles-btn');
+            originalButton.textContent = '✍️ Chỉnh sửa/Dịch tiêu đề thủ công';
+            originalButton.onclick = editAllTitles;
+            
+            renderChapterList('chapter-list-container'); // Re-render in view mode
+            loadSelectedNovel(); // Update main display
+        }
+
+
+        function navigateChapter(direction) {
+            const novel = novelManagerData[appState.selectedNovelId];
+            if (!novel) return;
+            
+            const newIndex = appState.selectedChapterIndex + direction;
+            if (newIndex >= 0 && newIndex < novel.chapters.length) {
+                selectChapter(newIndex);
+                if (appState.isReadingMode) {
+                    document.getElementById('reading-status').textContent = `Đang tải và dịch Chương ${newIndex + 1}...`;
+                    startAITranslation(); 
+                }
+                
+            }
+        }
+
+
+        // --- DICTIONARY & RULE MANAGEMENT ---
+
+        function saveDictionary() {
+            localStorage.setItem(HAN_VIET_DICT_KEY, JSON.stringify(hanVietDictionary));
+            renderDictionary();
+        }
+
+        function renderDictionary() {
+            const listContainer = document.getElementById('dictionary-list');
+            listContainer.innerHTML = Object.entries(hanVietDictionary).map(([han, viet]) => `
+                <div class="flex justify-between items-center text-sm">
+                    <span class="font-mono text-text-dark">${han}</span>
+                    <span class="text-secondary truncate ml-2">${viet}</span>
+                </div>
+            `).join('');
+            if (Object.keys(hanVietDictionary).length === 0) {
+                listContainer.innerHTML = '<p class="text-gray-400 p-2 text-center">Từ điển trống.</p>';
+            }
+        }
+        
+        function handleDictionaryUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const content = e.target.result;
+                const lines = content.split('\n').filter(line => line.trim() !== '');
+                
+                let count = 0;
+                lines.forEach(line => {
+                    const parts = line.split(/, |: /).map(p => p.trim());
+                    if (parts.length >= 2) {
+                        const han = parts[0];
+                        const viet = parts[1];
+                        if (han && viet) {
+                            hanVietDictionary[han] = viet;
+                            count++;
+                        }
+                    }
+                });
+                
+                saveDictionary();
+                alert(`Đã thêm ${count} cặp từ mới vào từ điển Vĩnh viễn.`);
+            };
+            reader.readAsText(file, 'UTF-8');
+        }
+
+        function downloadDictionary() {
+            const content = Object.entries(hanVietDictionary).map(([han, viet]) => `${han}, ${viet}`).join('\n');
+            const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'han_viet_dictionary.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        // Han -> Viet Temporary Rules
+        function addHanVietTempRule() {
+            const han = document.getElementById('han-original-input').value.trim();
+            const viet = document.getElementById('han-replacement-input').value.trim();
+            if (han && viet) {
+                hanVietTempRules[han] = viet;
+                document.getElementById('han-original-input').value = '';
+                document.getElementById('han-replacement-input').value = '';
+                renderHanVietTempRules();
+            }
+        }
+
+        function renderHanVietTempRules() {
+            const listContainer = document.getElementById('han-viet-temp-list');
+            listContainer.innerHTML = Object.entries(hanVietTempRules).map(([han, viet]) => `
+                <div class="flex justify-between items-center text-sm bg-indigo-50 p-1 rounded-md">
+                    <span class="font-mono text-text-dark">${han} -> ${viet}</span>
+                    <button onclick="removeHanVietTempRule('${han}')" class="text-red-500 hover:text-red-700 text-xs ml-2">Xóa</button>
+                </div>
+            `).join('');
+            if (Object.keys(hanVietTempRules).length === 0) {
+                 listContainer.innerHTML = '<p class="text-gray-400 p-2 text-center">Danh sách trống.</p>';
+            }
+        }
+        
+        function removeHanVietTempRule(han) {
+            delete hanVietTempRules[han];
+            renderHanVietTempRules();
+        }
+
+        // Viet -> Viet Permanent Rules
+        function saveVietVietRules() {
+            localStorage.setItem(VIET_VIET_RULES_KEY, JSON.stringify(vietVietRules));
+            renderVietVietRules('vv-list-container-edit', false);
+        }
+
+        function addVietVietRule() {
+            const originalInput = document.getElementById('vv-original-input-edit');
+            const replacementInput = document.getElementById('vv-replacement-input-edit');
+            const original = originalInput.value.trim();
+            const replacement = replacementInput.value.trim();
+
+            if (original && replacement) {
+                // Check for existing rule to avoid duplicates
+                if (!vietVietRules.some(rule => rule.original === original)) {
+                    vietVietRules.push({ original, replacement });
+                    saveVietVietRules();
+                    // Clear inputs
+                    originalInput.value = '';
+                    replacementInput.value = '';
+                } else {
+                    alert('Quy tắc thay thế này đã tồn tại.');
+                }
+            }
+        }
+
+        function removeVietVietRule(index) {
+            vietVietRules.splice(index, 1);
+            saveVietVietRules();
+            // Re-run Han Viet translation to reflect change immediately
+            startHanVietTranslation(false); 
+        }
+
+        function renderVietVietRules(containerId, isModal) {
+            const container = document.getElementById(containerId);
+            const list = vietVietRules.map((rule, index) => `
+                <div class="flex justify-between items-center text-sm bg-gray-50 p-1 rounded-md">
+                    <span class="text-text-dark truncate">${rule.original} &rarr; <span class="text-red-500 font-semibold">${rule.replacement}</span></span>
+                    <button onclick="removeVietVietRule(${index})" class="text-red-500 hover:text-red-700 text-xs ml-2 font-semibold">Xóa</button>
+                </div>
+            `).join('');
+            container.innerHTML = list;
+             if (vietVietRules.length === 0) {
+                 container.innerHTML = '<p class="text-gray-400 p-2 text-center">Danh sách trống.</p>';
+            }
+
+            // Also update the list in the Viet-Viet Modal (if open)
+            if (isModal) {
+                const modalContainer = document.getElementById('vv-list-container');
+                modalContainer.innerHTML = list;
+            }
+        }
+
+
+        // --- TRANSLATION LOGIC ---
+
+        function applyHanVietRules(text, dict) {
+            let processedText = text;
+            const regex = new RegExp(`(${Object.keys(dict).join('|')})`, 'g');
+            
+            // Apply Han -> Viet substitution
+            processedText = processedText.replace(regex, (match) => {
+                const translation = dict[match];
+                // Wrap the substituted text for highlighting
+                return `<span class="han-viet-highlight">${translation}</span>`;
+            });
+            
+            // Apply Viet -> Viet substitution (Post-substitution)
+            vietVietRules.forEach(rule => {
+                // Use a non-global regex for all rules
+                const vvRegex = new RegExp(rule.original, 'g');
+                processedText = processedText.replace(vvRegex, (match) => {
+                    // Wrap the substituted text for highlighting
+                    return `<span class="han-viet-highlight bg-yellow-200">${rule.replacement}</span>`;
+                });
+            });
+
+            return processedText;
+        }
+
+        async function startHanVietTranslation(shouldStartAI = false) {
+            const rawContent = document.getElementById('chinese-input').value;
+            if (!rawContent.trim()) {
+                document.getElementById('vietnamese-output').innerHTML = '<p class="text-red-500 font-semibold">Vui lòng nhập hoặc chọn nội dung chương trước.</p>';
+                return;
+            }
+
+            const combinedDict = { ...hanVietDictionary, ...hanVietTempRules };
+
+            document.getElementById('vietnamese-output').innerHTML = '<p class="text-primary font-semibold">Đang áp dụng từ điển Hán Việt và các quy tắc tinh chỉnh...</p>';
+            
+            const hanVietOutput = applyHanVietRules(rawContent, combinedDict);
+            
+            document.getElementById('vietnamese-output').innerHTML = hanVietOutput;
+            
+            // Store the Han Viet output for AI step (clean up whitespace/newlines)
+            appState.currentHanVietOutput = hanVietOutput.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim(); 
+            saveAppState();
+            
+            document.getElementById('ai-translate-btn').disabled = false;
+
+            if (shouldStartAI) {
+                startAITranslation();
+            }
+        }
+
+        async function startAITranslation() {
+            if (apiKeys.length === 0) {
+                displayError('Vui lòng thêm ít nhất một Gemini API Key trong mục Cài đặt Nâng cao.');
+                return;
+            }
+
+            const novel = appState.selectedNovelId ? novelManagerData[appState.selectedNovelId] : null;
+
+            // 1. TỰ ĐỘNG CHẠY BƯỚC HÁN VIỆT (Nếu chưa có)
+            if (!appState.currentHanVietOutput) {
+                 await startHanVietTranslation(false);
+            }
+            
+            const hanVietContent = appState.currentHanVietOutput;
+            if (!hanVietContent) {
+                 displayError('Lỗi: Không thể xử lý nội dung Hán Việt đã tinh chỉnh. Vui lòng kiểm tra lại nội dung đầu vào.');
+                return;
+            }
+            
+            // Disable buttons during process
+            document.getElementById('ai-translate-btn').disabled = true;
+            document.getElementById('han-viet-translate-btn').disabled = true;
+
+            // Show loading and enter reading mode
+            appState.isReadingMode = true;
+            updateReadingModeContent('Đang chuẩn bị dịch...', 'Đang xử lý...');
+            updateUIState();
+
+            const chunkSize = generalSettings.chunkSize;
+            const chunks = [];
+            for (let i = 0; i < hanVietContent.length; i += chunkSize) {
+                chunks.push(hanVietContent.substring(i, i + chunkSize));
+            }
+            
+            let finalTranslation = '';
+            let successfulKey = null;
+            const keyCount = apiKeys.length;
+            
+            try {
+                for (let i = 0; i < chunks.length; i++) {
+                    let chunkTranslation = '';
+                    let success = false;
+                    
+                    document.getElementById('reading-status').textContent = `🚀 Đang dịch đoạn ${i + 1}/${chunks.length}...`;
+
+                    // --- XỬ LÝ TUẦN TỰ MỖI ĐOẠN ---
+                    
+                    for (let attempt = 0; attempt < MAX_API_RETRIES; attempt++) {
+                        const keyIndex = attempt % keyCount;
+                        const apiKeyToUse = apiKeys[keyIndex];
+                        
+                        try {
+                            const translatedText = await callAITranslationAPI(chunks[i], apiKeyToUse);
+                            chunkTranslation = translatedText;
+                            successfulKey = apiKeyToUse;
+                            success = true;
+                            break; // Thành công, chuyển sang đoạn tiếp theo
+                        } catch (error) {
+                            // Chờ trước khi thử lại với Key tiếp theo (chống Rate Limit)
+                            await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY_MS));
+                            if (attempt === MAX_API_RETRIES - 1) {
+                                // Nếu thử hết số lần cho phép
+                                throw new Error(`LỖI DỊCH THUẬT: Toàn bộ ${MAX_API_RETRIES} lần thử đều thất bại cho đoạn ${i+1}. Lỗi cuối cùng: ${error.message}`);
+                            }
+                            // Tiếp tục vòng lặp để thử Key tiếp theo
+                        }
+                    }
+                    if (!success) throw new Error("Thất bại dịch thuật cho một đoạn.");
+
+                    finalTranslation += chunkTranslation;
+                    
+                    // Update reading mode content on successful chunk translation
+                    const chapterTitle = novel.chapters[appState.selectedChapterIndex].title_vi;
+                    updateReadingModeContent(chapterTitle, finalTranslation);
+                }
+
+                // Final success update
+                document.getElementById('reading-status').textContent = `✅ Dịch hoàn tất. Đã sử dụng Key: ...${successfulKey.slice(-4)}`;
+                
+                // Save translation to novel data
+                if (novel && appState.selectedChapterIndex !== null) {
+                    novel.translations[`chapter_${appState.selectedChapterIndex}`] = {
+                        translatedText: finalTranslation,
+                        translatedAt: new Date().toISOString()
+                    };
+                    localStorage.setItem(NOVEL_DATA_KEY, JSON.stringify(novelManagerData));
+                }
+
+            } catch (error) {
+                // Exit reading mode on critical failure
+                exitReadingMode();
+                document.getElementById('vietnamese-output').innerHTML = `<p class="text-red-500 font-bold">${error.message}</p>`;
+            } finally {
+                document.getElementById('ai-translate-btn').disabled = false;
+                document.getElementById('han-viet-translate-btn').disabled = false;
+            }
+        }
+
+        async function callAITranslationAPI(text, apiKey) {
+            const apiUrl = API_URL + apiKey;
+            const payload = {
+                contents: [{ parts: [{ text: text }] }],
+                systemInstruction: { parts: [{ text: generalSettings.prompt }] },
+                config: {
+                    temperature: 0.7
+                }
+            };
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.candidates || result.candidates.length === 0) {
+                const errorMessage = result.error?.message || 'Lỗi không xác định từ API.';
+                throw new Error(`Lỗi API: Key ...${apiKey.slice(-4)}: ${errorMessage}`);
+            }
+
+            const translatedText = result.candidates[0]?.content?.parts[0]?.text;
+            if (!translatedText) {
+                throw new Error(`Lỗi API: Key ...${apiKey.slice(-4)}: Không nhận được văn bản dịch.`);
+            }
+
+            return translatedText;
+        }
+
+
+        // --- CHAPTER ANALYSIS AI ---
+
+        async function startChapterAnalysis() {
+            if (apiKeys.length === 0) {
+                displayError('Vui lòng thêm ít nhất một Gemini API Key để phân tích chương.');
+                return;
+            }
+            if (!appState.selectedNovelId) return;
+
+            const novel = novelManagerData[appState.selectedNovelId];
+            if (novel.chapters.length > 0 && !confirm("Truyện đã có cấu trúc chương, bạn có muốn phân tích lại (sẽ tốn API credit)?")) return;
+
+            // Chuẩn bị dữ liệu (200,000 ký tự đầu)
+            const analysisContent = novel.rawContent.substring(0, MAX_AI_ANALYSIS_LENGTH);
+            const statusMessage = `Đang gửi ${analysisContent.length.toLocaleString('vi-VN')} ký tự đến AI để phân tích cấu trúc chương...`;
+            
+            document.getElementById('vietnamese-output').innerHTML = `<p class="text-primary font-semibold">${statusMessage}</p>`;
+            document.getElementById('extract-chapters-btn').disabled = true;
+
+            const chapterSchema = {
+                type: "ARRAY",
+                items: {
+                    type: "OBJECT",
+                    properties: {
+                        "startMarker": { "type": "STRING", "description": "Chuỗi ký tự bắt đầu chính xác của chương này trong văn bản gốc. Ví dụ: 'Chương 101' hoặc '第101章'" },
+                        "title_cn": { "type": "STRING", "description": "Tiêu đề Hán tự gốc của chương, bao gồm cả số chương (nếu có)." }
+                    },
+                    "propertyOrdering": ["startMarker", "title_cn"]
+                }
+            };
+
+            const systemPrompt = "Bạn là một nhà phân tích cấu trúc truyện. Nhiệm vụ của bạn là phân tích đoạn văn bản thô được cung cấp, trích xuất tất cả các chương và trả lời dưới định dạng JSON sau. Không trả lời bằng bất kỳ lời lẽ hay markdown nào khác ngoài JSON thuần túy.";
+            
+            const prompt = `Phân tích văn bản thô sau và trích xuất tất cả các chương bạn tìm thấy. Đảm bảo chuỗi 'startMarker' phải chính xác tuyệt đối. Văn bản: ${analysisContent}`;
+
+            try {
+                // Sử dụng cơ chế API gọi riêng (chuyên biệt cho JSON)
+                const chaptersJson = await callAIAnalysisAPI_JSON(prompt, systemPrompt, chapterSchema);
+                
+                // Translate titles
+                document.getElementById('vietnamese-output').innerHTML = `<p class="text-primary font-semibold">✅ Phân tích cấu trúc thành công. Đang dịch tiêu đề...</p>`;
+                const translatedTitles = await translateChapterTitles(chaptersJson.map(c => c.title_cn));
+                
+                const finalChapters = chaptersJson.map((chapter, index) => ({
+                    ...chapter,
+                    title_vi: translatedTitles[index] || chapter.title_cn
+                }));
+
+                // Update novel data
+                novel.chapters = finalChapters;
+                localStorage.setItem(NOVEL_DATA_KEY, JSON.stringify(novelManagerData));
+
+                document.getElementById('vietnamese-output').innerHTML = `<p class="text-secondary font-bold">✅ Phân tích và dịch tiêu đề thành công! Tìm thấy ${finalChapters.length} chương.</p>`;
+                
+                updateUIState();
+                selectChapter(0); // Auto load first chapter
+            } catch (error) {
+                document.getElementById('vietnamese-output').innerHTML = `<p class="text-red-500 font-bold">LỖI PHÂN TÍCH AI:</p><p class="mt-2 text-sm">${error.message}</p><p class="mt-2 text-sm">Vui lòng kiểm tra chuỗi đánh dấu chương và API Keys.</p>`;
+            } finally {
+                document.getElementById('extract-chapters-btn').disabled = false;
+            }
+        }
+        
+        // Hàm gọi API chuyên biệt cho JSON (có xoay vòng Key và độ trễ cao)
+        async function callAIAnalysisAPI_JSON(prompt, systemPrompt, responseSchema) {
+            if (apiKeys.length === 0) throw new Error('Không có API Key nào được cung cấp.');
+            
+            let lastError = "Không thể kết nối hoặc phân tích JSON.";
+            const keyCount = apiKeys.length;
+
+            for (let attempt = 0; attempt < keyCount; attempt++) {
+                 const key = apiKeys[attempt % keyCount];
+
+                try {
+                    const apiUrl = API_URL + key;
+                    const payload = {
+                        contents: [{ parts: [{ text: prompt }] }],
+                        systemInstruction: { parts: [{ text: systemPrompt }] },
+                        config: {
+                            responseMimeType: "application/json",
+                            responseSchema: responseSchema
+                        }
+                    };
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const result = await response.json();
+                    
+                    if (!response.ok || !result.candidates || result.candidates.length === 0) {
+                        lastError = `Lỗi Key ...${key.slice(-4)}: ${result.error?.message || 'Lỗi không xác định.'}`;
+                        await new Promise(resolve => setTimeout(resolve, JSON_API_DELAY_MS)); // Độ trễ cao cho lỗi nghiêm trọng
+                        continue;
+                    }
+
+                    const jsonText = result.candidates[0].content.parts[0].text;
+                    let cleanedJsonText = jsonText.replace(/```json\s*|```/g, '').trim();
+
+                    const parsedJson = JSON.parse(cleanedJsonText);
+                    return parsedJson;
+                } catch (error) {
+                    lastError = `Lỗi cú pháp/kết nối Key ...: ${error.message}`;
+                    await new Promise(resolve => setTimeout(resolve, JSON_API_DELAY_MS));
+                }
+            }
+
+            throw new Error(`Toàn bộ Key đều thất bại. Lỗi cuối cùng: ${lastError}`);
+        }
+
+        async function translateChapterTitles(titles) {
+            const prompt = `Dịch danh sách các tiêu đề chương sau sang tiếng Việt. Rất quan trọng: Hãy giữ nguyên cấu trúc đánh số chương (ví dụ: 'Chương 101', '第101章') và chỉ dịch phần tiêu đề sau số chương. Trả lời dưới dạng một mảng JSON các chuỗi đã dịch. Ví dụ: ["Chương 101: Tiêu đề đã dịch", "Chương 102: Tiêu đề đã dịch"]. Tiêu đề gốc: ${JSON.stringify(titles)}`;
+
+            const titleSchema = {
+                type: "ARRAY",
+                items: { type: "STRING" }
+            };
+
+            const systemPrompt = "Bạn là chuyên gia dịch tiêu đề truyện. Chỉ trả lời bằng một mảng JSON các chuỗi đã dịch, không có bất kỳ văn bản nào khác.";
+
+            try {
+                 const translatedArray = await callAIAnalysisAPI_JSON(prompt, systemPrompt, titleSchema);
+                 if (Array.isArray(translatedArray) && translatedArray.length === titles.length) {
+                    return translatedArray;
+                 } else {
+                     throw new Error('Kết quả dịch tiêu đề không phải là mảng hoặc thiếu dữ liệu.');
+                 }
+            } catch (error) {
+                console.error("Lỗi dịch tiêu đề AI:", error);
+                return titles; // Fallback to original titles
+            }
+        }
+
+
+        // --- READING MODE & STYLES ---
+
+        function updateReadingModeContent(title, content) {
+            const novel = novelManagerData[appState.selectedNovelId];
+            if (!novel || appState.selectedChapterIndex === null) return;
+            
+            document.getElementById('reading-chapter-title').textContent = title;
+            document.getElementById('reading-content').innerHTML = content;
+            
+            // Update nav button status
+            const isFirst = appState.selectedChapterIndex === 0;
+            const isLast = appState.selectedChapterIndex === novel.chapters.length - 1;
+            document.getElementById('prev-chapter-btn-read').disabled = isFirst;
+            document.getElementById('next-chapter-btn-read').disabled = isLast;
+        }
+
+        function exitReadingMode() {
+            appState.isReadingMode = false;
+            saveAppState();
+            document.getElementById('reading-status').textContent = '';
+            updateUIState();
+        }
+        
+        // --- STYLE SETTINGS ---
+        
+        function saveReadingStyle() {
+            const style = appState.readingStyle;
+            style.fontSize = document.getElementById('setting-font-size').value + 'px';
+            style.lineHeight = document.getElementById('setting-line-height').value;
+            style.bgColor = document.getElementById('setting-bg-color').value;
+            style.textColor = document.getElementById('setting-text-color').value;
+
+            localStorage.setItem(READING_STYLE_KEY, JSON.stringify(style));
+            applyReadingStyle();
+        }
+
+        function applyReadingStyle() {
+            const style = appState.readingStyle;
+            const container = document.getElementById('reading-mode-container');
+            const content = document.getElementById('reading-content');
+
+            if (container && content) {
+                container.style.setProperty('--bg-color', style.bgColor);
+                container.style.setProperty('--text-color', style.textColor);
+                content.style.setProperty('--line-height', style.lineHeight);
+                content.style.setProperty('--font-size', style.fontSize);
+            }
+            
+            // Also update input values for modal consistency
+            if (document.getElementById('setting-font-size')) {
+                document.getElementById('setting-font-size').value = parseInt(style.fontSize);
+                document.getElementById('setting-line-height').value = style.lineHeight;
+                document.getElementById('setting-bg-color').value = style.bgColor;
+                document.getElementById('setting-text-color').value = style.textColor;
+            }
+        }
+
+        // --- DOWNLOADS ---
+
+        function downloadChapter() {
+            const novel = novelManagerData[appState.selectedNovelId];
+            if (!novel || appState.selectedChapterIndex === null) return alert("Vui lòng chọn chương đã dịch.");
+            
+            const chapterKey = `chapter_${appState.selectedChapterIndex}`;
+            const translation = novel.translations[chapterKey];
+            
+            if (!translation || !translation.translatedText) return alert("Chương này chưa có bản dịch hoàn chỉnh.");
+
+            const chapterTitle = novel.chapters[appState.selectedChapterIndex].title_vi || "Chương_dịch";
+            const cleanTitle = chapterTitle.replace(/[:\/\\*?"<>|]/g, '').trim();
+
+            const content = `${chapterTitle}\n\n${translation.translatedText}`;
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${cleanTitle}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadBook() {
+            const novel = novelManagerData[appState.selectedNovelId];
+            if (!novel) return alert("Vui lòng chọn truyện để tải xuống.");
+
+            const bookTitle = novel.metadata.title;
+            const cleanTitle = bookTitle.replace(/[:\/\\*?"<>|]/g, '').trim();
+            
+            let fullContent = `Tên Truyện: ${bookTitle}\nTác giả: ${novel.metadata.author || 'Không rõ'}\nGiới thiệu: ${novel.metadata.description || 'Không có'}\n\n====================\n\n`;
+
+            novel.chapters.forEach((chapter, index) => {
+                const chapterKey = `chapter_${index}`;
+                const translation = novel.translations[chapterKey];
+
+                if (translation && translation.translatedText) {
+                    fullContent += `\n\n${chapter.title_vi}\n\n${translation.translatedText}\n\n`;
+                } else {
+                    fullContent += `\n\n[CHƯƠNG ${index + 1}: ${chapter.title_cn} - CHƯA DỊCH HOÀN CHỈNH]\n\n`;
+                }
+            });
+            
+            const blob = new Blob([fullContent], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${cleanTitle}_FULL_DICH.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+
+        // --- MODAL & ERROR HANDLING ---
+
+        function openModal(id) {
+            document.getElementById(id).style.display = 'flex';
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        function displayError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            setTimeout(() => errorDiv.classList.add('hidden'), 8000);
+        }
+
+        // --- INITIALIZATION ---
+        
+        window.onload = loadFromLocalStorage;
+
+    </script>
+</body>
+</html>
