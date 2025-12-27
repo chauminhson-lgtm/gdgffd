@@ -3,735 +3,358 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Trích Xuất Văn Bản Chuyên Nghiệp</title>
+    <title>Chuyển đổi Ảnh sang Văn bản (OCR)</title>
     <!-- Tải Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Tải PDF.js để xử lý PDF trên client-side -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        /* Thiết lập font Inter mặc định */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            min-height: 100vh;
+        }
     </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-blue': '#4285F4',
+                        'secondary-gray': '#e0e0e0',
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body class="bg-gray-50 min-h-screen p-4 md:p-8">
+<body class="p-4 sm:p-8 flex items-center justify-center">
 
-    <div class="max-w-4xl mx-auto bg-white shadow-2xl rounded-xl p-6 md:p-10">
-        <header class="mb-8 text-center">
-            <h1 class="text-3xl md:text-4xl font-extrabold text-indigo-700">
-                AI Trích Xuất Văn Bản Tài Liệu
+    <div class="w-full max-w-4xl bg-white shadow-2xl rounded-xl p-6 md:p-10">
+        
+        <!-- Cảnh báo API Key cho người dùng chạy local -->
+        <div id="apiKeyWarning" class="p-3 mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-lg hidden" role="alert">
+            <p class="font-bold">Cảnh báo Lỗi 403 (Lỗi API)</p>
+            <p class="text-sm">Nếu bạn đang chạy file này trên máy tính cá nhân, bạn cần chèn **API Key của Gemini** vào đoạn code JavaScript (biến `API_KEY`) để ứng dụng hoạt động. Lỗi 403 là do thiếu/sai key.</p>
+        </div>
+
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
+                Trích xuất Văn bản từ Hình ảnh
             </h1>
-            <p class="mt-2 text-gray-500">
-                Sử dụng Gemini AI để OCR và phân tích nội dung có chọn lọc từ File Ảnh hoặc PDF.
-            </p>
+            <p class="text-gray-500">Sử dụng sức mạnh của Gemini để chuyển đổi hình ảnh sang chữ viết.</p>
         </header>
 
-        <!-- KHU VỰC TẢI FILE VÀ TÙY CHỌN -->
-        <div class="space-y-6">
-
-            <!-- 0. NHẬP API KEY (ĐÃ NÂNG CẤP LƯU VĨNH VIỄN VÀ HỖ TRỢ ĐA KHÓA) -->
-            <div class="bg-red-50 p-5 rounded-lg border border-red-200">
-                <label for="userApiKeysInput" class="block text-lg font-semibold text-red-700 mb-2">
-                    0. Khóa API Gemini Tùy Chỉnh (Dán nhiều khóa, mỗi khóa 1 dòng)
-                </label>
-                <textarea id="userApiKeysInput" rows="3"
-                    placeholder="Dán Khóa API Gemini của bạn tại đây (Mỗi khóa một dòng. Để trống nếu dùng trong Canvas)"
-                    class="w-full px-3 py-2 border border-red-300 rounded-lg text-gray-700 focus:ring-red-500 focus:border-red-500 resize-none"></textarea>
-                <p id="tempMessageArea" class="mt-2 text-sm font-medium"></p>
-                <p class="mt-2 text-xs text-red-600 italic">
-                    *Các khóa được nhập sẽ được **tự động lưu vĩnh viễn** trên thiết bị của bạn.*
-                </p>
-            </div>
+        <!-- Khu vực Tải lên Ảnh và Xem trước -->
+        <div class="grid md:grid-cols-2 gap-8 mb-8">
             
-            <!-- 1. Tải File -->
-            <div class="bg-indigo-50 p-5 rounded-lg border border-indigo-200">
-                <label for="fileInput" class="block text-lg font-semibold text-indigo-700 mb-3">
-                    1. Tải File (.jpg, .png, .pdf)
+            <!-- Tải lên -->
+            <div class="flex flex-col">
+                <label for="imageUpload" class="block text-lg font-medium text-gray-700 mb-3">
+                    1. Tải lên hình ảnh của bạn (Hỗ trợ nhiều file)
                 </label>
-                <input type="file" id="fileInput" accept=".jpg, .jpeg, .png, .pdf"
-                    class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer">
+                <input 
+                    type="file" 
+                    id="imageUpload" 
+                    accept="image/*" 
+                    multiple
+                    class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-blue file:text-white hover:file:bg-blue-600"
+                    onchange="previewImage(event)"
+                >
+                
+                <button 
+                    id="convertButton"
+                    onclick="handleConvert()" 
+                    class="mt-6 w-full py-3 px-4 bg-primary-blue text-white font-semibold rounded-lg shadow-md hover:bg-blue-600 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled
+                >
+                    <span id="buttonText">2. Chuyển đổi sang Văn bản</span>
+                </button>
+
+                <div id="statusMessage" class="mt-4 text-center text-sm font-medium text-gray-600 hidden"></div>
             </div>
 
-            <!-- 1.1. CHỌN PHẠM VI XỬ LÝ -->
-            <div id="fileScopeSelection" class="bg-blue-50 p-5 rounded-lg border border-blue-200 hidden">
-                <p class="block text-lg font-semibold text-blue-700 mb-3">
-                    1.1. Chọn Phạm Vi Xử Lý PDF
-                </p>
-                <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-6">
-                    <label class="flex items-center text-gray-700 cursor-pointer">
-                        <input type="radio" name="fileScope" value="single" checked
-                            class="form-radio h-5 w-5 text-blue-600 focus:ring-blue-500">
-                        <span class="ml-2 font-medium">Từng Trang Cụ Thể</span>
-                    </label>
-                    <label class="flex items-center text-gray-700 cursor-pointer">
-                        <input type="radio" name="fileScope" value="all"
-                            class="form-radio h-5 w-5 text-blue-600 focus:ring-blue-500">
-                        <span class="ml-2 font-medium">Toàn Bộ File (Chế độ song song)</span>
-                    </label>
-                </div>
-                <p class="mt-2 text-sm text-blue-600 italic hidden" id="allPagesWarning">
-                    *Lưu ý: Chế độ Toàn Bộ File sẽ xử lý các trang song song để tăng tốc, nhưng có thể gây lỗi timeout với file quá lớn.*
-                </p>
+            <!-- Xem trước Ảnh/Thông tin -->
+            <div class="flex flex-col items-center justify-center border-2 border-dashed border-secondary-gray p-4 rounded-lg min-h-[200px] h-full">
+                <!-- Hiển thị ảnh đầu tiên để xem trước -->
+                <img id="imagePreview" src="" alt="Xem trước hình ảnh đầu tiên" class="max-w-full max-h-56 rounded-lg shadow-inner hidden object-contain mb-2">
+                <p id="placeholderText" class="text-gray-400 text-center">Hình ảnh đầu tiên sẽ xuất hiện ở đây.</p>
+                <!-- Hiển thị số lượng file đã chọn -->
+                <p id="fileCountText" class="text-gray-600 text-sm mt-3 font-semibold hidden"></p>
+            </div>
+        </div>
+
+        <!-- Khu vực Kết quả Văn bản -->
+        <div class="mt-8 border-t pt-8">
+             <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">
+                    Kết quả Văn bản đã Trích xuất
+                </h2>
+                <button 
+                    id="copyButton"
+                    onclick="copyText()" 
+                    class="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg shadow-sm hover:bg-gray-300 transition duration-150 disabled:opacity-50"
+                    disabled
+                >
+                    Sao chép
+                </button>
             </div>
 
-            <!-- 1.5. Chọn Trang PDF -->
-            <div id="pdfPageSelection" class="bg-yellow-50 p-5 rounded-lg border border-yellow-200 hidden">
-                <label for="pageNumberInput" class="block text-lg font-semibold text-yellow-700 mb-3">
-                    1.2. Chọn Trang PDF Cần Xử Lý (Mặc định: Trang 1)
-                </label>
-                <div class="flex items-center space-x-3">
-                    <input type="number" id="pageNumberInput" value="1" min="1"
-                        class="w-20 px-3 py-2 border border-yellow-300 rounded-lg text-gray-700 focus:ring-yellow-500 focus:border-yellow-500">
-                    <span id="pageCountDisplay" class="text-sm text-yellow-600 font-medium">/ Tổng số: --</span>
-                </div>
-            </div>
-
-            <!-- 2. Tùy Chọn Trích Xuất -->
-            <div class="bg-pink-50 p-5 rounded-lg border border-pink-200">
-                <p class="block text-lg font-semibold text-pink-700 mb-3">
-                    2. Tùy Chọn Trích Xuất (Phân tích AI)
-                </p>
-                <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-6">
-                    <label class="flex items-center text-gray-700 cursor-pointer">
-                        <input type="radio" name="extractionType" value="full" checked
-                            class="form-radio h-5 w-5 text-pink-600 focus:ring-pink-500">
-                        <span class="ml-2 font-medium">Toàn bộ trang (OCR thông thường)</span>
-                    </label>
-                    <label class="flex items-center text-gray-700 cursor-pointer">
-                        <input type="radio" name="extractionType" value="chapter"
-                            class="form-radio h-5 w-5 text-pink-600 focus:ring-pink-500">
-                        <span class="ml-2 font-medium">Nội dung Chương Truyện/Bài Viết (Phân tích cấu trúc Tinh chỉnh)</span>
-                    </label>
-                </div>
-
-                <!-- 2.1. LỜI NHẮC TÙY CHỈNH -->
-                <div id="customPromptArea" class="mt-4 hidden">
-                    <label for="customPrompt" class="block text-sm font-medium text-pink-700 mb-2">
-                        Chỉnh sửa Lời nhắc AI (Prompt) cho chế độ Phân tích Tinh chỉnh:
-                    </label>
-                    <textarea id="customPrompt" rows="4"
-                        class="w-full p-3 border border-pink-300 rounded-lg focus:ring-pink-500 focus:border-pink-500 text-sm"
-                        placeholder="Nhập lời nhắc tùy chỉnh của bạn ở đây..."></textarea>
-                    <p id="defaultPromptInfo" class="mt-2 text-xs text-gray-500 italic">
-                        *Nếu để trống, hệ thống sẽ sử dụng lời nhắc mặc định đã được tối ưu.*
-                    </p>
-                </div>
-            </div>
-
-            <button id="processButton" disabled
-                class="w-full py-3 px-4 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition duration-300 disabled:bg-indigo-300 disabled:cursor-not-allowed flex items-center justify-center">
-                <svg id="loadingSpinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <div id="loadingIndicator" class="flex justify-center items-center py-6 hidden">
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-primary-blue" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                <span id="buttonText">Bắt đầu Trích Xuất</span>
-            </button>
-        </div>
-
-        <!-- HIỂN THỊ KẾT QUẢ -->
-        <div class="mt-10 pt-6 border-t border-gray-200">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">3. Kết Quả Trích Xuất</h2>
-            <div id="outputArea" class="bg-gray-100 p-4 rounded-lg min-h-[200px] overflow-auto border border-gray-300">
-                <textarea id="resultTextarea" readonly
-                    class="w-full h-[300px] bg-white p-4 text-gray-800 border-2 border-dashed border-gray-300 rounded-lg focus:outline-none focus:border-indigo-500 transition duration-150 text-sm"
-                    placeholder="Văn bản trích xuất sẽ xuất hiện ở đây sau khi phân tích..."></textarea>
-                <div class="mt-4 flex justify-end">
-                    <button id="copyButton" disabled
-                        class="px-4 py-2 bg-green-500 text-white font-semibold rounded-lg shadow hover:bg-green-600 transition duration-300 disabled:bg-green-300">
-                        Sao Chép Văn Bản
-                    </button>
-                </div>
+                <span class="text-primary-blue">Đang xử lý hình ảnh...</span>
             </div>
-            <div id="errorMessage" class="mt-4 text-red-600 font-medium hidden"></div>
+            
+            <textarea 
+                id="outputText" 
+                rows="10" 
+                readonly 
+                class="w-full p-4 border border-gray-300 rounded-lg bg-gray-50 text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-blue"
+                placeholder="Văn bản đã trích xuất sẽ hiển thị ở đây (Văn bản từ nhiều ảnh sẽ được phân tách)."
+            ></textarea>
         </div>
 
     </div>
 
-    <!-- KHU VỰC CANVAS ẨN ĐỂ RENDER PDF -->
-    <canvas id="pdfCanvas" class="hidden"></canvas>
-    
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Cấu hình API Key (được cung cấp tự động bởi môi trường Canvas)
-        const CANVAS_API_KEY = ""; 
-        const API_MODEL = 'gemini-2.5-flash-preview-09-2025';
-
-        const fileInput = document.getElementById('fileInput');
-        const processButton = document.getElementById('processButton');
-        const loadingSpinner = document.getElementById('loadingSpinner');
-        const buttonText = document.getElementById('buttonText');
-        const errorMessage = document.getElementById('errorMessage');
-        const resultTextarea = document.getElementById('resultTextarea');
-        const copyButton = document.getElementById('copyButton');
+    <script>
+        // Global variables for API communication
+        // CHÚ Ý: Nếu bạn chạy file này trên máy tính cá nhân, bạn phải tự chèn API key của mình vào đây.
+        // Lỗi 403 thường xảy ra khi API key bị thiếu hoặc không hợp lệ.
+        const API_KEY = "AIzaSyCY2KlovVAOwHZxCPwpR92gDGqSXMDBf8s"; // <-- HÃY CHÈN API KEY CỦA BẠN VÀO GIỮA DẤU NHÁY NÀY NẾU CHẠY TRÊN MÁY TÍNH CÁ NHÂN
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
         
-        // CÁC BIẾN CHO TÍNH NĂNG ĐA TRANG VÀ PROMPT TÙY CHỈNH
-        const pageNumberInput = document.getElementById('pageNumberInput');
-        const pdfPageSelection = document.getElementById('pdfPageSelection');
-        const pageCountDisplay = document.getElementById('pageCountDisplay');
-        const fileScopeSelection = document.getElementById('fileScopeSelection');
-        const allPagesWarning = document.getElementById('allPagesWarning');
-        const customPromptArea = document.getElementById('customPromptArea');
-        const customPrompt = document.getElementById('customPrompt');
-        const userApiKeysInput = document.getElementById('userApiKeysInput'); // Textarea cho nhiều keys
-        const tempMessageArea = document.getElementById('tempMessageArea');
-        let currentPdf = null; // Biến lưu trữ đối tượng PDF đã tải
+        const imageUpload = document.getElementById('imageUpload');
+        const imagePreview = document.getElementById('imagePreview');
+        const placeholderText = document.getElementById('placeholderText');
+        const fileCountText = document.getElementById('fileCountText'); 
+        const convertButton = document.getElementById('convertButton');
+        const outputText = document.getElementById('outputText');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const statusMessage = document.getElementById('statusMessage');
+        const copyButton = document.getElementById('copyButton'); 
+        const apiKeyWarning = document.getElementById('apiKeyWarning'); // Tham chiếu mới
 
-        // Firebase variables
-        let db;
-        let auth;
-        let userId = null;
-        let isAuthReady = false;
-        let storedApiKeys = []; // Array to hold keys loaded from Firestore
-
-        // Default Prompts (Lời nhắc mặc định đã tối ưu)
-        const DEFAULT_PROMPT_FULL = "Trích xuất toàn bộ văn bản từ trang này. Vui lòng giữ nguyên định dạng đoạn văn.";
-        const DEFAULT_PROMPT_CHAPTER = "Là một chuyên gia phân tích bố cục tài liệu, nhiệm vụ của bạn là đọc hình ảnh và chỉ trích xuất VĂN BẢN NỘI DUNG CHÍNH của chương truyện/bài viết. HÃY LOẠI BỎ tuyệt đối: Tiêu đề, Số trang, Tên tác giả/sách (header/footer), Chú thích hình ảnh (caption), và Nội dung lề. Cung cấp văn bản đã trích xuất dưới dạng đoạn văn liên tục, không thêm bất kỳ lời bình luận hay tiêu đề nào vào đầu hoặc cuối. Trả lời bằng tiếng Việt.";
-
-        // Set initial value for custom prompt
-        customPrompt.value = DEFAULT_PROMPT_CHAPTER;
-        
-        document.addEventListener('DOMContentLoaded', () => {
-            // Khởi tạo trạng thái ban đầu của UI
-            toggleCustomPrompt(); 
-            setupFirebase();
-
-            // Gắn sự kiện một cách lập trình (Programmatically attach event listeners)
-            userApiKeysInput.addEventListener('blur', saveKeysToFirestore);
-            processButton.addEventListener('click', processFile);
-            copyButton.addEventListener('click', copyResult); // FIX: Gắn sự kiện Sao chép
-
-            // FIX: Gắn sự kiện cho các nút radio (fileScope và extractionType)
-            document.querySelectorAll('input[name="extractionType"]').forEach(radio => {
-                radio.addEventListener('change', toggleCustomPrompt);
-            });
-            document.querySelectorAll('input[name="fileScope"]').forEach(radio => {
-                radio.addEventListener('change', updatePageSelection);
-            });
-        });
-
-        /**
-         * Lấy cấu hình API (Key và URL) động
-         */
-        function getApiConfig() {
-            // 1. Lấy keys từ input của người dùng (textarea, keys cách nhau bởi dấu xuống dòng)
-            const uiKeys = userApiKeysInput.value.trim()
-                .split('\n')
-                .map(k => k.trim())
-                .filter(k => k.length > 0);
-            
-            // 2. Kết hợp keys từ UI (ưu tiên), keys từ Firestore, và Canvas key (fallback)
-            const allKeys = [...new Set([
-                ...uiKeys, 
-                ...storedApiKeys,
-                CANVAS_API_KEY 
-            ])].filter(k => k && k.length > 0);
-
-            return { allKeys, apiUrlTemplate: `https://generativelanguage.googleapis.com/v1beta/models/${API_MODEL}:generateContent?key=` };
-        }
-        
-        /**
-         * Lấy reference đến document lưu keys trong Firestore
-         */
-        function getKeysDocRef() {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            // Sử dụng đường dẫn user-specific cho dữ liệu riêng tư
-            return doc(db, 'artifacts', appId, 'users', userId, 'gemini_keys', 'keys_data');
-        }
-
-        /**
-         * Thiết lập Firebase và xác thực người dùng
-         */
-        async function setupFirebase() {
-            try {
-                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                
-                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        userId = user.uid;
-                    } else {
-                        // Sign in using custom token or anonymously if token is missing
-                        try {
-                            if (initialAuthToken) {
-                                const userCredential = await signInWithCustomToken(auth, initialAuthToken);
-                                userId = userCredential.user.uid;
-                            } else {
-                                const userCredential = await signInAnonymously(auth);
-                                userId = userCredential.user.uid;
-                            }
-                        } catch (e) {
-                            // Fallback if auth fails completely
-                            userId = crypto.randomUUID(); 
-                            console.error("Lỗi xác thực Firebase, sử dụng ID ngẫu nhiên:", e);
-                        }
-                    }
-                    
-                    isAuthReady = true;
-                    console.log(`Firebase Ready. User ID: ${userId}`);
-                    // Sau khi auth sẵn sàng, bắt đầu lắng nghe keys
-                    listenForApiKeys();
-                });
-                
-            } catch (e) {
-                console.error("Lỗi khởi tạo Firebase:", e);
-                isAuthReady = true; 
-                userId = crypto.randomUUID();
-            }
-        }
-        
-        /**
-         * Lắng nghe keys API từ Firestore và cập nhật UI/state
-         */
-        function listenForApiKeys() {
-            if (!db || !userId) return;
-
-            const docRef = getKeysDocRef();
-            
-            onSnapshot(docRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    storedApiKeys = Array.isArray(data.keys) ? data.keys : [];
-                    // Cập nhật textarea chỉ khi nó rỗng (để không ghi đè dữ liệu người dùng đang nhập)
-                    if (userApiKeysInput.value.trim() === '') {
-                        userApiKeysInput.value = storedApiKeys.join('\n');
-                    }
-                    console.log(`Đã tải ${storedApiKeys.length} khóa API từ Firestore.`);
-                } else {
-                    storedApiKeys = [];
-                    console.log("Chưa có khóa API nào được lưu trữ.");
-                }
-            }, (error) => {
-                console.error("Lỗi khi lắng nghe API Keys từ Firestore:", error);
-            });
-        }
-
-        /**
-         * Lưu keys API từ UI vào Firestore
-         */
-        async function saveKeysToFirestore() {
-            if (!db || !userId || !isAuthReady) {
-                // Chỉ hiển thị lỗi nếu người dùng đã nhập key nhưng hệ thống chưa sẵn sàng
-                if (userApiKeysInput.value.trim().length > 0) {
-                     showTemporaryMessage("Hệ thống chưa sẵn sàng để lưu. Vui lòng thử lại sau.", 'text-red-600');
-                }
+        // Function to copy text to clipboard
+        function copyText() {
+            const textToCopy = outputText.value;
+            if (!textToCopy) {
+                statusMessage.textContent = "Không có văn bản để sao chép.";
+                statusMessage.classList.remove('hidden', 'text-green-600');
+                statusMessage.classList.add('text-red-500');
                 return;
             }
 
-            // 1. Lấy keys từ input của người dùng (luôn ưu tiên keys mới nhất từ UI)
-            const uiKeys = userApiKeysInput.value.trim()
-                .split('\n')
-                .map(k => k.trim())
-                .filter(k => k.length > 0);
-                
-            // 2. Chỉ lưu những keys mà người dùng đã nhập
-            const keysToSave = [...new Set(uiKeys)]; 
-
-            const docRef = getKeysDocRef();
             try {
-                // Chỉ lưu khi có dữ liệu hoặc khi người dùng xóa hết (để xóa trong db)
-                if (keysToSave.length > 0 || storedApiKeys.length > 0) {
-                    await setDoc(docRef, { keys: keysToSave }, { merge: false }); // Ghi đè danh sách
-                    storedApiKeys = keysToSave;
-                    showTemporaryMessage("Đã lưu khóa API thành công!", 'text-green-600');
-                }
-            } catch (e) {
-                console.error("Lỗi khi lưu khóa API vào Firestore:", e);
-                showTemporaryMessage(`Lỗi lưu khóa API: ${e.message}`, 'text-red-600');
-            }
-        }
-        
-        /**
-         * Hiển thị thông báo tạm thời trên UI
-         */
-        function showTemporaryMessage(message, colorClass) {
-            tempMessageArea.textContent = message;
-            tempMessageArea.className = `mt-2 text-sm font-medium ${colorClass}`;
-            setTimeout(() => {
-                tempMessageArea.textContent = '';
-                tempMessageArea.className = 'mt-2 text-sm font-medium';
-            }, 4000);
-        }
-
-        /**
-         * Toggles the visibility of the Custom Prompt area.
-         */
-        function toggleCustomPrompt() {
-            const checkedRadio = document.querySelector('input[name="extractionType"]:checked');
-            const extractionMode = checkedRadio ? checkedRadio.value : 'full';
-
-            if (extractionMode === 'chapter') {
-                customPromptArea.classList.remove('hidden');
-            } else {
-                customPromptArea.classList.add('hidden');
-            }
-        }
-
-        /**
-         * Updates the visibility and state of the page number input based on file scope.
-         */
-        function updatePageSelection() {
-            const checkedRadio = document.querySelector('input[name="fileScope"]:checked');
-            const fileScope = checkedRadio ? checkedRadio.value : 'single';
-            
-            if (fileScope === 'single') {
-                pdfPageSelection.classList.remove('opacity-50', 'pointer-events-none');
-                pageNumberInput.disabled = false;
-                allPagesWarning.classList.add('hidden');
+                // Use temporary textarea for reliable document.execCommand('copy') across environments
+                const tempTextArea = document.createElement("textarea");
+                tempTextArea.value = textToCopy;
+                tempTextArea.style.position = "fixed"; 
+                document.body.appendChild(tempTextArea);
+                tempTextArea.focus();
+                tempTextArea.select();
                 
-                if (currentPdf) {
-                    pdfPageSelection.classList.remove('hidden');
-                }
-            } else {
-                pdfPageSelection.classList.add('hidden');
-                pdfPageSelection.classList.add('opacity-50', 'pointer-events-none');
-                pageNumberInput.disabled = true;
-                allPagesWarning.classList.remove('hidden');
+                document.execCommand('copy');
+
+                document.body.removeChild(tempTextArea);
+                
+                // Show feedback
+                const originalText = copyButton.textContent;
+                copyButton.textContent = "Đã sao chép!";
+                copyButton.classList.add('bg-green-100', 'text-green-700');
+                setTimeout(() => {
+                    copyButton.textContent = originalText;
+                    copyButton.classList.remove('bg-green-100', 'text-green-700');
+                }, 2000);
+                
+            } catch (err) {
+                statusMessage.textContent = "Không thể sao chép văn bản.";
+                statusMessage.classList.remove('hidden', 'text-green-600');
+                statusMessage.classList.add('text-red-500');
+                console.error('Copy failed:', err);
             }
         }
 
 
-        // Kích hoạt nút Process khi có file được chọn và tải thông tin PDF
-        fileInput.addEventListener('change', async () => {
-            processButton.disabled = true;
-            resultTextarea.value = '';
-            copyButton.disabled = true;
-            errorMessage.classList.add('hidden');
-            pdfPageSelection.classList.add('hidden');
-            fileScopeSelection.classList.add('hidden');
-            currentPdf = null;
+        // Function to display image preview and enable the button (updated for multiple files)
+        function previewImage(event) {
+            const files = event.target.files;
+            if (files.length > 0) {
+                const firstFile = files[0];
+                const reader = new FileReader();
+                
+                // Show preview of the first image
+                reader.onload = function(e) {
+                    imagePreview.src = e.target.result;
+                    imagePreview.classList.remove('hidden');
+                    placeholderText.classList.add('hidden');
+                };
+                reader.readAsDataURL(firstFile);
 
-            if (!fileInput.files.length) return;
+                // Show file count
+                fileCountText.textContent = `Đã chọn ${files.length} ảnh.`;
+                fileCountText.classList.remove('hidden');
 
-            const file = fileInput.files[0];
-            
-            if (file.type === 'application/pdf') {
-                try {
-                    const pdfData = await file.arrayBuffer();
-                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.js';
-                    const loadingTask = pdfjsLib.getDocument({ data: pdfData });
-                    currentPdf = await loadingTask.promise;
-                    
-                    const numPages = currentPdf.numPages;
-                    pageCountDisplay.textContent = `/ Tổng số: ${numPages}`;
-                    pageNumberInput.setAttribute('max', numPages);
-                    pageNumberInput.value = 1;
+                convertButton.disabled = false;
+                outputText.value = ''; // Clear previous results
+                statusMessage.classList.add('hidden');
+                copyButton.disabled = true; // Disable copy button until result is ready
 
-                    fileScopeSelection.classList.remove('hidden');
-                    updatePageSelection(); 
-                    
-                    processButton.disabled = false;
-                } catch (error) {
-                    errorMessage.textContent = `Lỗi tải PDF: ${error.message}. Vui lòng kiểm tra lại file.`;
-                    errorMessage.classList.remove('hidden');
-                    processButton.disabled = true;
-                }
-            } else if (file.type.startsWith('image/')) {
-                fileScopeSelection.classList.add('hidden'); 
-                pdfPageSelection.classList.add('hidden');
-                processButton.disabled = false;
             } else {
-                errorMessage.textContent = "Định dạng file không được hỗ trợ.";
-                errorMessage.classList.remove('hidden');
-                processButton.disabled = true;
+                imagePreview.classList.add('hidden');
+                placeholderText.classList.remove('hidden');
+                fileCountText.classList.add('hidden');
+                convertButton.disabled = true;
+                copyButton.disabled = true;
             }
-            if (isAuthReady && !processButton.disabled) {
-                processButton.disabled = false;
-            }
-        });
-
-        /**
-         * Xử lý file PDF: Render trang được chọn sang Canvas và lấy Base64 (ĐA TRANG)
-         */
-        async function renderPdfPageToImageBase64(pdf, pageNumber) {
-            if (pageNumber < 1 || pageNumber > pdf.numPages) {
-                throw new Error(`Số trang không hợp lệ: ${pageNumber}. Tổng số trang là ${pdf.numPages}.`);
-            }
-
-            const page = await pdf.getPage(pageNumber); 
-            const scale = 1.5;
-            const viewport = page.getViewport({ scale });
-            
-            const canvas = document.createElement('canvas'); 
-            const context = canvas.getContext('2d');
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-
-            const renderContext = {
-                canvasContext: context,
-                viewport: viewport
-            };
-            await page.render(renderContext).promise;
-
-            const base64Image = canvas.toDataURL('image/jpeg', 0.9); 
-            return base64Image.split(',')[1];
         }
-        
-        /**
-         * Xử lý file Image: Lấy Base64
-         */
-        function convertImageToBase64(file) {
+
+        // Function to convert file object to Base64 string for the API
+        function convertFileToBase64(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => {
-                    const base64Data = reader.result.split(',')[1]; 
+                    // Extract only the Base64 data (remove the mime type prefix)
+                    const base64Data = reader.result.split(',')[1];
                     resolve(base64Data);
                 };
-                reader.onerror = (error) => reject("Lỗi khi đọc file ảnh.");
+                reader.onerror = error => reject(error);
                 reader.readAsDataURL(file);
             });
         }
 
-        /**
-         * Lấy lời nhắc (prompt) dựa trên chế độ trích xuất và input người dùng.
-         */
-        function getInstruction(extractionMode) {
-            if (extractionMode === 'full') {
-                return DEFAULT_PROMPT_FULL;
+        // Main function to handle the conversion (updated for multiple files)
+        async function handleConvert() {
+            const files = imageUpload.files;
+            if (files.length === 0) {
+                statusMessage.textContent = "Vui lòng chọn một hình ảnh trước.";
+                statusMessage.classList.remove('hidden');
+                return;
             }
-            
-            const custom = customPrompt.value.trim();
-            if (custom) {
-                return custom;
-            }
-            
-            return DEFAULT_PROMPT_CHAPTER;
-        }
 
-        /**
-         * Gọi API Gemini với Base64 Image và Lời nhắc (Hỗ trợ Failover Keys)
-         */
-        async function callGeminiAPI(base64Data, mimeType, instruction) {
-            const { allKeys, apiUrlTemplate } = getApiConfig();
-
-            if (allKeys.length === 0) {
-                throw new Error("Lỗi xác thực: Không tìm thấy Khóa API. Vui lòng nhập khóa API hợp lệ vào mục 0.");
+            // Kiểm tra API Key cho môi trường local
+            if (API_KEY === "") {
+                statusMessage.textContent = "LỖI: Thiếu API Key. Vui lòng chèn API Key vào biến API_KEY trong code JavaScript để ứng dụng hoạt động ngoài môi trường Canvas.";
+                statusMessage.classList.remove('hidden', 'text-green-600');
+                statusMessage.classList.add('text-red-500');
+                convertButton.disabled = false;
+                convertButton.querySelector('#buttonText').textContent = "2. Chuyển đổi sang Văn bản";
+                loadingIndicator.classList.add('hidden');
+                return;
             }
-            
-            const payload = {
-                contents: [
-                    {
+
+
+            // UI state management (Loading)
+            convertButton.disabled = true;
+            copyButton.disabled = true;
+            convertButton.querySelector('#buttonText').textContent = `Đang xử lý 1/${files.length}...`;
+            loadingIndicator.classList.remove('hidden');
+            outputText.value = '';
+            statusMessage.classList.add('hidden');
+
+            let allExtractedText = "";
+            let successfulConversions = 0;
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                convertButton.querySelector('#buttonText').textContent = `Đang xử lý ${i + 1}/${files.length}...`;
+                
+                let base64Image;
+                try {
+                    base64Image = await convertFileToBase64(file);
+                } catch (error) {
+                    allExtractedText += `--- Lỗi đọc file ${i + 1} (${file.name}): ${error.message} ---\n\n`;
+                    outputText.value = allExtractedText; // Update text area with error message
+                    continue; // Skip to next file
+                }
+
+                // API Payload
+                const userPrompt = "Vui lòng phân tích kỹ hình ảnh được cung cấp và trích xuất tất cả văn bản hiển thị. Chỉ phản hồi bằng văn bản thô đã trích xuất. Không thêm bất kỳ lời bình luận, tóm tắt hoặc mô tả nào.";
+                const payload = {
+                    contents: [{
                         role: "user",
-                        parts: [
-                            { text: instruction },
-                            {
-                                inlineData: {
-                                    mimeType: mimeType,
-                                    data: base64Data // FIX: Thay đổi base66Data thành base64Data
-                                }
-                            }
-                        ]
-                    }
-                ],
-            };
+                        parts: [{ text: userPrompt }, {
+                            inlineData: { mimeType: file.type, data: base64Image }
+                        }]
+                    }],
+                };
 
-            let lastError = null;
+                let maxRetries = 3;
+                let delay = 1000;
 
-            for (const key of allKeys) {
-                const apiUrl = apiUrlTemplate + key;
-                const maxRetries = 3; 
-
-                for (let attempt = 0; attempt < maxRetries; attempt++) {
+                for (let retry = 0; retry < maxRetries; retry++) {
                     try {
-                        const response = await fetch(apiUrl, { 
+                        const response = await fetch(API_URL, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(payload)
                         });
 
                         if (!response.ok) {
-                            const errorBody = await response.json();
-                            const errorMessage = errorBody.error?.message || response.statusText;
-                            
-                            // Nếu lỗi là 403 (không hợp lệ), dừng retries và thử key tiếp theo
-                            if (response.status === 403 && attempt === 0) { 
-                                lastError = new Error(`Lỗi API 403: Khóa [***${key.slice(-4)}] không hợp lệ.`);
-                                break; // Thoát vòng lặp retries, chuyển sang khóa tiếp theo
+                            if (response.status === 403) {
+                                // Lỗi 403 thường là do API Key, hiển thị thông báo cụ thể
+                                throw new Error(`API lỗi: ${response.status} (403 Forbidden). Vui lòng kiểm tra API Key.`);
                             }
-                            
-                            throw new Error(`Lỗi API ${response.status}: ${errorMessage}`);
+                            if (response.status === 429 && retry < maxRetries - 1) {
+                                await new Promise(resolve => setTimeout(resolve, delay));
+                                delay *= 2;
+                                continue;
+                            }
+                            throw new Error(`API lỗi: ${response.status} ${response.statusText}`);
                         }
 
                         const result = await response.json();
-                        const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                        const candidate = result.candidates?.[0];
+                        let extractedText = candidate?.content?.parts?.[0]?.text || "Không thể trích xuất văn bản hoặc kết quả trống.";
                         
-                        if (text) {
-                            return text; // Thành công!
+                        allExtractedText += `--- VĂN BẢN TỪ ẢNH ${i + 1} (${file.name}) ---\n\n`;
+                        allExtractedText += extractedText;
+                        allExtractedText += "\n\n---------------------------------------\n\n";
+
+                        successfulConversions++;
+                        break; // API call successful, move to next file
+
+                    } catch (error) {
+                        if (retry === maxRetries - 1) {
+                            allExtractedText += `--- Lỗi xử lý API cho ảnh ${i + 1} (${file.name}): ${error.message}. ---\n\n---------------------------------------\n\n`;
                         } else {
-                            throw new Error("API không trả về văn bản trích xuất (có thể hình ảnh quá mờ hoặc không có văn bản).");
-                        }
-                    } catch (error) {
-                        lastError = error;
-                        // Chỉ log error không phải 403 để tránh spam console khi failover
-                        if (!lastError.message.includes('403')) {
-                            console.error(`Lỗi lần ${attempt + 1} với Khóa [***${key.slice(-4)}]:`, lastError.message);
-                        }
-                        
-                        if (attempt < maxRetries - 1) {
-                            const delay = Math.pow(2, attempt) * 1000; // Exponential Backoff
-                            await new Promise(resolve => setTimeout(resolve, delay));
+                             await new Promise(resolve => setTimeout(resolve, delay));
+                             delay *= 2;
                         }
                     }
                 }
-                // Log khi một key đã bị loại bỏ
-                if (lastError && (lastError.message.includes('403') || lastError.message.includes('500'))) {
-                    console.warn(`Thử khóa API tiếp theo...`);
-                }
+                outputText.value = allExtractedText; // Update UI after each file processing
             }
-            throw lastError; // Ném lỗi cuối cùng sau khi tất cả các keys đều thất bại
-        }
 
-
-        /**
-         * Xử lý file PDF theo chế độ Toàn Bộ File (Sử dụng Promise.all để xử lý song song)
-         */
-        async function processAllPdfPages(pdf, extractionMode) {
-            const numPages = pdf.numPages;
-            const instruction = getInstruction(extractionMode);
-            const processingPromises = [];
-
-            resultTextarea.value = 'Bắt đầu xử lý toàn bộ file PDF... (Đang xử lý song song)';
+            // Final UI state update
+            loadingIndicator.classList.add('hidden');
+            convertButton.disabled = false;
+            convertButton.querySelector('#buttonText').textContent = "2. Chuyển đổi sang Văn bản";
             
-            for (let i = 1; i <= numPages; i++) {
-                const pageNumber = i;
-                
-                const pagePromise = (async () => {
-                    try {
-                        buttonText.textContent = `Đang tải Trang ${pageNumber}/${numPages}...`; 
-                        
-                        const base64Data = await renderPdfPageToImageBase64(pdf, pageNumber);
-                        const mimeType = 'image/jpeg';
-                        
-                        buttonText.textContent = `Đang phân tích Trang ${pageNumber}/${numPages} (AI)...`; 
-                        const extractedPageText = await callGeminiAPI(base64Data, mimeType, instruction);
-                        
-                        return { page: pageNumber, text: extractedPageText, error: null };
-                    } catch (error) {
-                        console.error(`Lỗi Trang ${pageNumber}:`, error);
-                        return { page: pageNumber, text: null, error: error.message || "Lỗi không xác định." };
-                    }
-                })();
-                
-                processingPromises.push(pagePromise);
-            }
-
-            const allResults = await Promise.all(processingPromises);
-
-            allResults.sort((a, b) => a.page - b.page);
-
-            let combinedText = '';
-            allResults.forEach(result => {
-                combinedText += `\n\n==================================================\n--- TRANG ${result.page}/${numPages} ---\n==================================================\n\n`;
-                if (result.error) {
-                    const errorMsg = `LỖI TRANG ${result.page}: Không thể trích xuất. ${result.error}`;
-                    combinedText += `\n[${errorMsg}]\n\n`;
-                } else {
-                    combinedText += result.text;
-                }
-            });
-
-            return combinedText;
-        }
-
-        /**
-         * Hàm chính xử lý file và gọi AI
-         */
-        async function processFile() {
-            const file = fileInput.files[0];
-            if (!file) {
-                errorMessage.textContent = "Vui lòng chọn một file để xử lý.";
-                errorMessage.classList.remove('hidden');
-                return;
-            }
-
-            // Đặt trạng thái Loading
-            processButton.disabled = true;
-            loadingSpinner.classList.remove('hidden');
-            buttonText.textContent = 'Đang phân tích...';
-            errorMessage.classList.add('hidden');
-            resultTextarea.value = '';
-            copyButton.disabled = true;
-
-            try {
-                let base64Data = '';
-                let mimeType = '';
-                const extractionMode = document.querySelector('input[name="extractionType"]:checked').value;
-                const instruction = getInstruction(extractionMode);
-                let extractedText = '';
-                
-                if (!isAuthReady) {
-                    throw new Error("Hệ thống đang tải dữ liệu người dùng. Vui lòng đợi trong giây lát.");
-                }
-
-                // BƯỚC 1: Xử lý file (PDF hoặc Image)
-                if (file.type === 'application/pdf') {
-                    if (!currentPdf) throw new Error("Chưa tải đối tượng PDF. Vui lòng thử tải lại file.");
-                    
-                    const fileScope = document.querySelector('input[name="fileScope"]:checked').value;
-
-                    if (fileScope === 'all') {
-                        extractedText = await processAllPdfPages(currentPdf, extractionMode);
-                    } else {
-                        const pageNumber = parseInt(pageNumberInput.value, 10);
-                        if (isNaN(pageNumber) || pageNumber < 1 || pageNumber > currentPdf.numPages) {
-                            throw new Error(`Số trang ${pageNumber} không hợp lệ. Vui lòng nhập số trang từ 1 đến ${currentPdf.numPages}.`);
-                        }
-
-                        mimeType = 'image/jpeg';
-                        base64Data = await renderPdfPageToImageBase64(currentPdf, pageNumber);
-                        
-                        buttonText.textContent = `Đang xử lý Trang ${pageNumber}/${currentPdf.numPages}...`;
-                        extractedText = await callGeminiAPI(base64Data, mimeType, instruction);
-                    }
-
-                } else if (file.type.startsWith('image/')) {
-                    mimeType = file.type;
-                    base64Data = await convertImageToBase64(file);
-                    extractedText = await callGeminiAPI(base64Data, mimeType, instruction);
-
-                } else {
-                    throw new Error("Định dạng file không được hỗ trợ.");
-                }
-                
-                resultTextarea.value = extractedText;
+            if (successfulConversions > 0) {
+                statusMessage.textContent = `Đã trích xuất thành công ${successfulConversions}/${files.length} ảnh.`;
+                statusMessage.classList.remove('hidden', 'text-red-500');
+                statusMessage.classList.add('text-green-600');
                 copyButton.disabled = false;
-
-            } catch (error) {
-                console.error("Lỗi chung:", error);
-                errorMessage.textContent = `Lỗi: ${error.message || "Đã xảy ra lỗi không xác định trong quá trình xử lý."}`;
-                errorMessage.classList.remove('hidden');
-            } finally {
-                // Đặt lại trạng thái
-                processButton.disabled = false;
-                loadingSpinner.classList.add('hidden');
-                buttonText.textContent = 'Bắt đầu Trích Xuất';
+            } else {
+                statusMessage.textContent = `Không có ảnh nào được trích xuất thành công. Vui lòng kiểm tra lại.`;
+                statusMessage.classList.remove('hidden', 'text-green-600');
+                statusMessage.classList.add('text-red-500');
+                copyButton.disabled = true;
             }
         }
 
-        /**
-         * Sao chép văn bản kết quả
-         */
-        function copyResult() {
-            resultTextarea.select();
-            try {
-                document.execCommand('copy');
-                const originalText = copyButton.textContent;
-                copyButton.textContent = 'Đã Sao Chép!';
-                setTimeout(() => {
-                    copyButton.textContent = originalText;
-                }, 2000);
-            } catch (err) {
-                console.error('Không thể sao chép văn bản:', err);
-                errorMessage.textContent = 'Lỗi: Không thể sao chép văn bản tự động. Vui lòng sao chép thủ công.';
-                errorMessage.classList.remove('hidden');
+        // Initialize state on load
+        window.onload = () => {
+            if (imageUpload.files.length === 0) {
+                convertButton.disabled = true;
             }
-        }
+            // Hiển thị cảnh báo nếu API key trống
+            if (API_KEY === "") {
+                apiKeyWarning.classList.remove('hidden');
+            }
+        };
 
     </script>
 </body>
