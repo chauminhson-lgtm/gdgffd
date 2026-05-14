@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Novel Translator Pro - Fixed</title>
+    <script src="https://js.puter.com/v2/"></script>
+    <style>
+        :root { --sidebar-width: 320px; --primary: #2563eb; --success: #22c55e; }
+        body { font-family: 'Segoe UI', system-ui; margin: 0; display: flex; height: 100vh; background: #f1f5f9; overflow: hidden; }
+        
+        .sidebar { width: var(--sidebar-width); background: #fff; border-right: 1px solid #cbd5e1; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; border-bottom: 2px solid #f1f5f9; }
+        #chapterList { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; }
+        #chapterList li { padding: 12px 20px; cursor: pointer; border-bottom: 1px solid #f8fafc; font-size: 14px; transition: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #chapterList li:hover { background: #f1f5f9; }
+        #chapterList li.active { background: #eff6ff; color: var(--primary); font-weight: bold; border-left: 4px solid var(--primary); }
+        #chapterList li.translated { border-right: 4px solid var(--success); }
+
+        .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .top-bar { background: #fff; padding: 15px 25px; border-bottom: 1px solid #cbd5e1; display: flex; align-items: center; gap: 15px; }
+        .workspace { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; overflow: hidden; }
+        
+        .box { display: flex; flex-direction: column; background: #fff; border-radius: 8px; border: 1px solid #cbd5e1; overflow: hidden; }
+        .box-header { padding: 10px 15px; background: #f8fafc; border-bottom: 1px solid #cbd5e1; font-weight: bold; font-size: 13px; }
+        
+        #sourceView, #resultView { flex: 1; padding: 20px; overflow-y: auto; font-size: 17px; line-height: 1.8; white-space: pre-wrap; outline: none; }
+        
+        .rules-input { flex: 1; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+        button { padding: 10px 18px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: 0.2s; white-space: nowrap; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-download { background: #0f172a; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <div class="sidebar-header">
+        <h3 style="margin:0 0 10px 0;">Danh sách chương</h3>
+        <input type="file" id="fileInput" accept=".txt" style="width: 100%;">
+        <div id="statusInfo" style="margin-top:10px; font-size: 12px; color: #64748b;">Chưa nạp file</div>
+    </div>
+    <ul id="chapterList"></ul>
+</div>
+
+<div class="main">
+    <div class="top-bar">
+        <input type="text" id="rulesInput" class="rules-input" placeholder="Quy tắc: xưng hô ta-ngươi, dịch mượt...">
+        <label style="font-size: 13px; display: flex; align-items: center; gap: 5px;">
+            <input type="checkbox" id="autoNext"> Dịch liên tục
+        </label>
+        <button class="btn-primary" id="btnAction" onclick="handleTranslate()">DỊCH CHƯƠNG NÀY</button>
+        <button class="btn-download" onclick="downloadAll()">TẢI XUỐNG (.TXT)</button>
+    </div>
+
+    <div class="workspace">
+        <div class="box">
+            <div class="box-header">NỘI DUNG GỐC</div>
+            <div id="sourceView"></div>
+        </div>
+        <div class="box">
+            <div class="box-header">BẢN DỊCH AI</div>
+            <div id="resultView" contenteditable="true"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let chapters = [];
+    let translatedStore = JSON.parse(localStorage.getItem('novel_cache') || '{}');
+    let currentIndex = -1;
+
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const content = event.target.result;
+            const lines = content.split(/\r?\n/);
+            
+            // Regex nhận diện chương bao gồm cả tiêu đề phía sau
+            const chapterRegex = /^(Chương\s*\d+|第\s*\d+\s*[章|节]|Chapter\s*\d+|Tiết\s*\d+).*/i;
+            
+            const tempChapters = [];
+            let currentChapter = null;
+
+            lines.forEach((line) => {
+                const trimmed = line.trim();
+                if (chapterRegex.test(trimmed)) {
+                    // Lọc trùng: Nếu tiêu đề mới giống hệt tiêu đề chương đang xử lý thì bỏ qua
+                    if (currentChapter && trimmed === currentChapter.title) return;
+
+                    if (currentChapter) tempChapters.push(currentChapter);
+                    
+                    currentChapter = {
+                        title: trimmed,
+                        content: ""
+                    };
+                } else if (currentChapter) {
+                    if (trimmed !== "" || currentChapter.content !== "") {
+                        currentChapter.content += line + "\n";
+                    }
+                }
+            });
+
+            if (currentChapter) tempChapters.push(currentChapter);
+            
+            chapters = tempChapters;
+            renderList();
+            document.getElementById('statusInfo').innerText = `Đã nạp ${chapters.length} chương.`;
+        };
+        reader.readAsText(file);
+    });
+
+    function renderList() {
+        const list = document.getElementById('chapterList');
+        list.innerHTML = "";
+        chapters.forEach((ch, i) => {
+            const li = document.createElement('li');
+            li.id = `item-${i}`;
+            li.innerText = ch.title;
+            if (translatedStore[i]) li.classList.add('translated');
+            li.onclick = () => selectChapter(i);
+            list.appendChild(li);
+        });
+    }
+
+    function selectChapter(index) {
+        currentIndex = index;
+        document.querySelectorAll('#chapterList li').forEach(el => el.classList.remove('active'));
+        document.getElementById(`item-${index}`).classList.add('active');
+        
+        // Hiển thị cả tiêu đề và nội dung trong ô Gốc để AI có đủ dữ liệu
+        document.getElementById('sourceView').innerText = chapters[index].title + "\n\n" + chapters[index].content;
+        document.getElementById('resultView').innerText = translatedStore[index] || "";
+        document.getElementById(`item-${index}`).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    async function handleTranslate() {
+        if (currentIndex === -1) return alert("Chọn chương để dịch!");
+        if (!puter.auth.isSignedIn()) return await puter.auth.signIn();
+
+        const btn = document.getElementById('btnAction');
+        const output = document.getElementById('resultView');
+        const rules = document.getElementById('rulesInput').value;
+
+        btn.disabled = true;
+        btn.innerText = "ĐANG DỊCH...";
+        output.innerText = "";
+
+        try {
+            // Gửi cả tiêu đề và nội dung cho AI
+            const fullSource = chapters[currentIndex].title + "\n\n" + chapters[currentIndex].content;
+            
+            const prompt = `Dịch chương truyện sau sang tiếng Việt. 
+            Yêu cầu: ${rules || 'Văn phong mượt mà.'}
+            Dịch cả tiêu đề chương. Chỉ trả về bản dịch.
+            
+            Nội dung:
+            ${fullSource}`;
+
+            const response = await puter.ai.chat(prompt, { stream: true });
+
+            let fullText = "";
+            for await (const part of response) {
+                if (part?.text) {
+                    fullText += part.text;
+                    output.innerText = fullText;
+                    document.getElementById('resultView').scrollTop = document.getElementById('resultView').scrollHeight;
+                }
+            }
+
+            translatedStore[currentIndex] = fullText;
+            localStorage.setItem('novel_cache', JSON.stringify(translatedStore));
+            document.getElementById(`item-${currentIndex}`).classList.add('translated');
+
+            if (document.getElementById('autoNext').checked && currentIndex < chapters.length - 1) {
+                setTimeout(() => {
+                    selectChapter(currentIndex + 1);
+                    handleTranslate();
+                }, 1500);
+            }
+        } catch (err) {
+            alert("Lỗi: " + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "DỊCH CHƯƠNG NÀY";
+        }
+    }
+
+    function downloadAll() {
+        let finalData = "";
+        chapters.forEach((ch, i) => {
+            if (translatedStore[i]) finalData += `${translatedStore[i]}\n\n\n`;
+        });
+        const blob = new Blob([finalData], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = "Truyen_Dich.txt";
+        a.click();
+    }
+</script>
+</body>
+</html>
