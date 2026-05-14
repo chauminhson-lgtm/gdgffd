@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Puter AI Translator Pro - v2.0</title>
+    <!-- Nhúng thư viện Puter.js -->
+    <script src="https://js.puter.com/v2/"></script>
+    <style>
+        :root { --primary-color: #2563eb; --bg-color: #f1f5f9; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg-color); padding: 20px; color: #1e293b; }
+        .container { max-width: 1000px; margin: auto; background: white; padding: 25px; border-radius: 16px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: var(--primary-color); margin-top: 0; }
+        
+        .status-bar { background: #f8fafc; padding: 10px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #e2e8f0; }
+        .status-online { color: #16a34a; font-weight: bold; }
+
+        .controls { display: flex; gap: 12px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        
+        textarea, .output-box { width: 100%; height: 400px; padding: 15px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 15px; line-height: 1.6; box-sizing: border-box; }
+        textarea { resize: none; focus: border-color: var(--primary-color); }
+        
+        .output-box { background: #fdfdfd; position: relative; overflow-y: auto; }
+        #result { white-space: pre-wrap; }
+        
+        button { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+        .btn-translate { background: var(--primary-color); color: white; flex-grow: 1; }
+        .btn-translate:hover { background: #1d4ed8; transform: translateY(-1px); }
+        .btn-translate:disabled { background: #94a3b8; cursor: not-allowed; }
+        
+        .btn-copy { position: sticky; top: 0; float: right; background: #f1f5f9; border: 1px solid #cbd5e1; font-size: 12px; z-index: 10; }
+        
+        select, input[type="file"] { padding: 8px; border-radius: 8px; border: 1px solid #cbd5e1; background: white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Puter AI Translator</h2>
+
+    <div class="status-bar">
+        <span>Trạng thái hệ thống: <span id="authStatus" class="status-online">Đang kiểm tra...</span></span>
+        <span id="modelName">Model: Auto (GPT/Claude/Llama)</span>
+    </div>
+
+    <div class="controls">
+        <input type="file" id="fileInput" accept=".txt,.md,.html">
+        <select id="targetLang">
+            <option value="Vietnamese">Dịch sang Tiếng Việt</option>
+            <option value="English">Dịch sang Tiếng Anh</option>
+            <option value="Chinese">Dịch sang Tiếng Trung</option>
+            <option value="Japanese">Dịch sang Tiếng Nhật</option>
+        </select>
+        <button class="btn-translate" id="translateBtn" onclick="handleTranslate()">BẮT ĐẦU DỊCH</button>
+    </div>
+
+    <div class="grid">
+        <textarea id="inputText" placeholder="Nhập văn bản hoặc chọn file để dịch..."></textarea>
+        
+        <div class="output-box" id="outputContainer">
+            <button class="btn-copy" onclick="copyResult()">Sao chép</button>
+            <div id="result"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 1. Tự động kiểm tra đăng nhập ngay khi tải trang
+    async function checkAuth() {
+        try {
+            if (!puter.auth.isSignedIn()) {
+                document.getElementById('authStatus').innerText = "Chưa đăng nhập (Click Dịch để đăng nhập)";
+                document.getElementById('authStatus').style.color = "red";
+            } else {
+                const user = await puter.auth.getUser();
+                document.getElementById('authStatus').innerText = "Đã kết nối: " + user.username;
+                document.getElementById('authStatus').style.color = "#16a34a";
+            }
+        } catch (e) {
+            console.error("Auth Error:", e);
+        }
+    }
+    checkAuth();
+
+    // 2. Xử lý đọc tệp tin
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('inputText').value = e.target.result;
+        };
+        reader.readAsText(file);
+    });
+
+    // 3. Hàm dịch thuật chính với Streaming
+    async function handleTranslate() {
+        const text = document.getElementById('inputText').value.trim();
+        const lang = document.getElementById('targetLang').value;
+        const resultDiv = document.getElementById('result');
+        const btn = document.getElementById('translateBtn');
+
+        if (!text) {
+            alert("Vui lòng nhập nội dung cần dịch!");
+            return;
+        }
+
+        // Kiểm tra đăng nhập trước khi gọi AI
+        if (!puter.auth.isSignedIn()) {
+            await puter.auth.signIn();
+            checkAuth();
+            return;
+        }
+
+        // Chuẩn bị giao diện
+        btn.disabled = true;
+        btn.innerText = "ĐANG DỊCH...";
+        resultDiv.innerText = ""; 
+
+        try {
+            // Câu lệnh tối ưu cho dịch thuật
+            const prompt = `Dịch đoạn văn bản sau sang ${lang}. Giữ nguyên cấu trúc, tên riêng và các ký hiệu đặc biệt. Chỉ trả về bản dịch: \n\n${text}`;
+
+            const response = await puter.ai.chat(prompt, { stream: true });
+
+            // Đọc dữ liệu stream
+            for await (const part of response) {
+                if (part?.text) {
+                    resultDiv.innerText += part.text;
+                    // Tự động cuộn xuống cuối
+                    const container = document.getElementById('outputContainer');
+                    container.scrollTop = container.scrollHeight;
+                }
+            }
+        } catch (error) {
+            console.error(error);
+            resultDiv.innerHTML = `<b style="color:red">Lỗi: ${error.message}</b>`;
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "BẮT ĐẦU DỊCH";
+        }
+    }
+
+    // 4. Hàm sao chép
+    function copyResult() {
+        const text = document.getElementById('result').innerText;
+        if (!text) return;
+        
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = document.querySelector('.btn-copy');
+            const originalText = btn.innerText;
+            btn.innerText = "ĐÃ CHÉP!";
+            setTimeout(() => btn.innerText = originalText, 2000);
+        });
+    }
+</script>
+
+</body>
+</html>
