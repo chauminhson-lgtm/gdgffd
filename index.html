@@ -2,206 +2,234 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>AI Novel Translator Pro - Puter.js</title>
+    <title>AI Novel Editor Pro - Puter.js</title>
     <script src="https://js.puter.com/v2/"></script>
     <style>
-        :root { --sidebar-width: 300px; --primary: #2563eb; }
-        body { font-family: 'Segoe UI', Tahoma; margin: 0; display: flex; height: 100vh; background: #f1f5f9; }
+        :root { --sidebar-width: 320px; --primary: #2563eb; --success: #22c55e; }
+        body { font-family: 'Segoe UI', system-ui; margin: 0; display: flex; height: 100vh; background: #f1f5f9; overflow: hidden; }
         
         /* Sidebar */
         .sidebar { width: var(--sidebar-width); background: #fff; border-right: 1px solid #cbd5e1; display: flex; flex-direction: column; }
-        .sidebar-header { padding: 15px; border-bottom: 1px solid #eee; }
+        .sidebar-header { padding: 20px; border-bottom: 2px solid #f1f5f9; }
         #chapterList { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; }
-        #chapterList li { padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #f8fafc; font-size: 14px; }
+        #chapterList li { padding: 12px 20px; cursor: pointer; border-bottom: 1px solid #f8fafc; font-size: 14px; transition: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         #chapterList li:hover { background: #f1f5f9; }
-        #chapterList li.active { background: #dbeafe; color: var(--primary); font-weight: bold; }
-        #chapterList li.translated { border-left: 4px solid #22c55e; }
+        #chapterList li.active { background: #eff6ff; color: var(--primary); font-weight: bold; border-left: 4px solid var(--primary); }
+        #chapterList li.translated { border-right: 4px solid var(--success); }
 
         /* Main Content */
-        .main { flex: 1; display: flex; flex-direction: column; padding: 20px; overflow: hidden; }
-        .toolbar { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; background: #fff; padding: 15px; border-radius: 8px; }
-        .workspace { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; flex: 1; min-height: 0; }
+        .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .top-bar { background: #fff; padding: 15px 25px; border-bottom: 1px solid #cbd5e1; display: flex; align-items: center; gap: 15px; }
+        .workspace { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; overflow: hidden; }
         
-        textarea, .output { width: 100%; height: 100%; padding: 15px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; background: #fff; overflow-y: auto; font-size: 16px; line-height: 1.7; }
-        .output { white-space: pre-wrap; position: relative; }
+        .box { display: flex; flex-direction: column; background: #fff; border-radius: 8px; border: 1px solid #cbd5e1; overflow: hidden; }
+        .box-header { padding: 10px 15px; background: #f8fafc; border-bottom: 1px solid #cbd5e1; font-weight: bold; font-size: 13px; }
         
-        .rules-box { margin-bottom: 15px; }
-        #rulesInput { width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #cbd5e1; }
+        #sourceView, #resultView { flex: 1; padding: 20px; overflow-y: auto; font-size: 17px; line-height: 1.8; white-space: pre-wrap; outline: none; }
+        #resultView { background: #fff; color: #1e293b; }
+
+        /* Controls */
+        .rules-input { flex: 1; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+        button { padding: 10px 18px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: 0.2s; white-space: nowrap; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-download { background: #0f172a; color: white; }
         
-        button { padding: 8px 15px; cursor: pointer; border: none; border-radius: 5px; background: var(--primary); color: white; font-weight: 600; }
-        button:disabled { background: #94a3b8; }
-        .btn-download { background: #059669; }
-        .auto-next-label { display: flex; align-items: center; gap: 5px; font-size: 14px; }
+        .toggle-group { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+        #statusInfo { font-size: 12px; color: #64748b; }
     </style>
 </head>
 <body>
 
 <div class="sidebar">
     <div class="sidebar-header">
-        <h3>Danh sách chương</h3>
-        <input type="file" id="fileInput" accept=".txt">
-        <p style="font-size: 11px; color: #64748b;">Hỗ trợ file cực lớn (1000+ chương)</p>
+        <h3 style="margin:0 0 15px 0;">Danh sách chương</h3>
+        <input type="file" id="fileInput" accept=".txt" style="font-size: 12px; width: 100%;">
+        <div id="statusInfo" style="margin-top:10px;">Chưa nạp file</div>
     </div>
     <ul id="chapterList"></ul>
 </div>
 
 <div class="main">
-    <div class="rules-box">
-        <input type="text" id="rulesInput" placeholder="Quy tắc dịch (VD: Xưng hô ta - ngươi, dịch 'Linh khí' thành 'Linh lực'...)">
-    </div>
+    <div class="top-bar">
+        <input type="text" id="rulesInput" class="rules-input" placeholder="Quy tắc dịch: xưng hô ta-ngươi, giữ nguyên Hán Việt...">
+        
+        <div class="toggle-group">
+            <input type="checkbox" id="autoNext"> <span>Dịch liên tục</span>
+        </div>
 
-    <div class="toolbar">
-        <button id="btnTranslate" onclick="translateCurrentChapter()">Dịch chương này</button>
-        <label class="auto-next-label">
-            <input type="checkbox" id="autoNext"> Tự động dịch tiếp chương sau
-        </label>
-        <button class="btn-download" onclick="downloadAll()">Tải xuống bản dịch (.txt)</button>
-        <span id="status" style="margin-left: auto; font-size: 13px; color: #64748b;">Đang chờ file...</span>
+        <button class="btn-primary" id="btnAction" onclick="handleTranslate()">DỊCH CHƯƠNG NÀY</button>
+        <button class="btn-download" onclick="downloadAll()">TẢI XUỐNG (.TXT)</button>
     </div>
 
     <div class="workspace">
-        <div id="sourceView" class="textarea" style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; overflow-y: auto;">
-            Nội dung gốc sẽ hiện ở đây...
+        <div class="box">
+            <div class="box-header">NỘI DUNG GỐC</div>
+            <div id="sourceView"></div>
         </div>
-        <div class="output" id="resultView">
-            Kết quả dịch...
+        <div class="box">
+            <div class="box-header">BẢN DỊCH AI</div>
+            <div id="resultView" contenteditable="true"></div>
         </div>
     </div>
 </div>
 
 <script>
     let chapters = [];
-    let translatedData = JSON.parse(localStorage.getItem('translated_novel') || '{}');
+    let translatedStore = JSON.parse(localStorage.getItem('novel_cache') || '{}');
     let currentIndex = -1;
 
-    // 1. Phân tách chương truyện
+    // 1. Xử lý File & Loại bỏ tiêu đề trùng
     document.getElementById('fileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = function(e) {
-            const fullText = e.target.result;
-            // Regex nhận diện "Chương X", "第X章", "Tiết X"...
-            const chapterRegex = /(^|\n)(Chương\s*\d+|第\s*\d+\s*章|Tiết\s*\d+|Chapter\s*\d+)/gi;
-            
-            const titles = fullText.match(chapterRegex) || [];
-            const contents = fullText.split(chapterRegex);
+        reader.onload = function(event) {
+            const lines = event.target.result.split(/\r?\n/);
+            const tempChapters = [];
+            let currentContent = [];
+            let lastTitle = "";
 
-            // Xử lý gộp tiêu đề và nội dung
-            chapters = [];
-            let contentIdx = 0;
-            
-            // Nếu file không có tiêu đề chương rõ ràng, coi như 1 chương
-            if (titles.length === 0) {
-                chapters.push({ title: "Toàn bộ văn bản", content: fullText });
-            } else {
-                for (let i = 0; i < titles.length; i++) {
-                    chapters.push({
-                        title: titles[i].trim(),
-                        content: contents[(i * 3) + 2] || "" 
-                    });
+            // Regex nhận diện chương (tiếng Việt, Trung, Anh)
+            const chapterRegex = /^(Chương\s*\d+|第\s*\d+\s*[章|节]|Chapter\s*\d+|Tiết\s*\d+)/i;
+
+            lines.forEach((line) => {
+                const trimmedLine = line.trim();
+                if (chapterRegex.test(trimmedLine)) {
+                    // Nếu tiêu đề này trùng với tiêu đề vừa xử lý, bỏ qua dòng này
+                    if (trimmedLine === lastTitle) return;
+
+                    // Lưu chương cũ trước khi sang chương mới
+                    if (lastTitle !== "") {
+                        tempChapters.push({ title: lastTitle, content: currentContent.join('\n').trim() });
+                    }
+                    
+                    lastTitle = trimmedLine;
+                    currentContent = [];
+                } else {
+                    if (trimmedLine !== "" || currentContent.length > 0) {
+                        currentContent.push(line);
+                    }
                 }
+            });
+
+            // Thêm chương cuối cùng
+            if (lastTitle !== "") {
+                tempChapters.push({ title: lastTitle, content: currentContent.join('\n').trim() });
             }
-            renderChapterList();
-            document.getElementById('status').innerText = `Đã tìm thấy ${chapters.length} chương.`;
+
+            chapters = tempChapters;
+            renderList();
+            document.getElementById('statusInfo').innerText = `Đã lọc trùng & nạp ${chapters.length} chương.`;
         };
         reader.readAsText(file);
     });
 
-    // 2. Hiển thị danh sách chương
-    function renderChapterList() {
+    // 2. Hiển thị danh sách
+    function renderList() {
         const list = document.getElementById('chapterList');
         list.innerHTML = "";
-        chapters.forEach((ch, index) => {
+        chapters.forEach((ch, i) => {
             const li = document.createElement('li');
+            li.id = `item-${i}`;
             li.innerText = ch.title;
-            if (translatedData[index]) li.classList.add('translated');
-            li.onclick = () => loadChapter(index);
-            li.id = `ch-${index}`;
+            if (translatedStore[i]) li.classList.add('translated');
+            li.onclick = () => selectChapter(i);
             list.appendChild(li);
         });
     }
 
-    // 3. Tải chương lên màn hình làm việc
-    function loadChapter(index) {
+    function selectChapter(index) {
         currentIndex = index;
-        document.querySelectorAll('#chapterList li').forEach(li => li.classList.remove('active'));
-        document.getElementById(`ch-${index}`).classList.add('active');
+        document.querySelectorAll('#chapterList li').forEach(el => el.classList.remove('active'));
+        document.getElementById(`item-${index}`).classList.add('active');
         
         document.getElementById('sourceView').innerText = chapters[index].content;
-        document.getElementById('resultView').innerText = translatedData[index] || "Chưa dịch chương này.";
+        document.getElementById('resultView').innerText = translatedStore[index] || "";
         
-        document.getElementById('status').innerText = `Đang xem: ${chapters[index].title}`;
+        // Cuộn sidebar đến chương đang chọn
+        document.getElementById(`item-${index}`).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
-    // 4. Hàm dịch thuật chính
-    async function translateCurrentChapter() {
-        if (currentIndex === -1) return alert("Hãy chọn một chương!");
+    // 3. Dịch thuật Streaming
+    async function handleTranslate() {
+        if (currentIndex === -1) return alert("Chọn chương để dịch!");
         
-        const btn = document.getElementById('btnTranslate');
-        const resultView = document.getElementById('resultView');
+        // Kiểm tra đăng nhập Puter (Đặc biệt quan trọng trên GitHub Pages)
+        if (!puter.auth.isSignedIn()) {
+            await puter.auth.signIn();
+            return;
+        }
+
+        const btn = document.getElementById('btnAction');
+        const output = document.getElementById('resultView');
         const rules = document.getElementById('rulesInput').value;
-        const autoNext = document.getElementById('autoNext').checked;
 
         btn.disabled = true;
-        resultView.innerText = "";
+        btn.innerText = "ĐANG DỊCH...";
+        output.innerText = "";
 
         try {
-            const prompt = `Bạn là một biên dịch viên chuyên nghiệp. Dịch chương truyện sau sang tiếng Việt. 
-            Quy tắc bổ sung: ${rules || 'Dịch sát nghĩa, mượt mà'}.
+            const prompt = `Bạn là dịch viên truyện chuyên nghiệp. Hãy dịch chương sau sang Tiếng Việt. 
+            Yêu cầu: ${rules || 'Dịch văn phong mượt mà, giữ đúng ngữ cảnh.'}
             Chỉ trả về bản dịch.
-            Nội dung: ${chapters[currentIndex].content}`;
+            
+            Nội dung:
+            ${chapters[currentIndex].content}`;
 
             const response = await puter.ai.chat(prompt, { stream: true });
 
-            let fullTranslation = "";
+            let fullText = "";
             for await (const part of response) {
                 if (part?.text) {
-                    fullTranslation += part.text;
-                    resultView.innerText = fullTranslation;
-                    document.getElementById('resultView').scrollTop = document.getElementById('resultView').scrollHeight;
+                    fullText += part.text;
+                    output.innerText = fullText;
+                    output.scrollTop = output.scrollHeight;
                 }
             }
 
-            // Lưu dữ liệu
-            translatedData[currentIndex] = fullTranslation;
-            localStorage.setItem('translated_novel', JSON.stringify(translatedData));
-            document.getElementById(`ch-${currentIndex}`).classList.add('translated');
+            // Lưu và đánh dấu đã dịch
+            translatedStore[currentIndex] = fullText;
+            localStorage.setItem('novel_cache', JSON.stringify(translatedStore));
+            document.getElementById(`item-${currentIndex}`).classList.add('translated');
 
-            // Tự động chuyển chương
-            if (autoNext && currentIndex < chapters.length - 1) {
-                document.getElementById('status').innerText = "Đang chuyển chương sau...";
+            // Chế độ tự động chuyển chương
+            if (document.getElementById('autoNext').checked && currentIndex < chapters.length - 1) {
                 setTimeout(() => {
-                    loadChapter(currentIndex + 1);
-                    translateCurrentChapter();
-                }, 2000);
+                    selectChapter(currentIndex + 1);
+                    handleTranslate();
+                }, 1500);
             }
 
-        } catch (error) {
-            alert("Lỗi dịch: " + error.message);
+        } catch (err) {
+            alert("Lỗi hệ thống: " + err.message);
         } finally {
             btn.disabled = false;
+            btn.innerText = "DỊCH CHƯƠNG NÀY";
         }
     }
 
-    // 5. Xuất file
+    // 4. Tải xuống
     function downloadAll() {
-        let finalOutput = "";
-        chapters.forEach((ch, index) => {
-            if (translatedData[index]) {
-                finalOutput += `--- ${ch.title} ---\n\n${translatedData[index]}\n\n`;
+        let finalData = "";
+        chapters.forEach((ch, i) => {
+            if (translatedStore[i]) {
+                finalData += `${ch.title}\n\n${translatedStore[i]}\n\n\n`;
             }
         });
 
-        if (!finalOutput) return alert("Chưa có chương nào được dịch!");
+        if (!finalData) return alert("Chưa có chương nào được dịch để tải!");
 
-        const blob = new Blob([finalOutput], { type: 'text/plain' });
+        const blob = new Blob([finalData], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = "Ban_Dich_AI.txt";
+        a.href = url;
+        a.download = "Truyen_Da_Dich_AI.txt";
         a.click();
     }
 </script>
+
 </body>
 </html>
