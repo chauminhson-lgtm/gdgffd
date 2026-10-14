@@ -1,15 +1,17 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
+    <!-- STREAMING_CHUNK:Khởi tạo thư viện và CSS Core... -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trình Chỉnh Sửa Truyện Pro - V5</title>
+    <title>Trình Chỉnh Sửa Truyện Pro - V6</title>
     <!-- Thư viện đọc file Word, xuất Docx và lưu file -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
     <script src="https://unpkg.com/html-docx-js@0.3.1/dist/html-docx.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     
     <style>
+        /* STREAMING_CHUNK:Thiết lập biến màu sắc và Layout tổng thể... */
         :root {
             --primary: #3b82f6; --primary-hover: #2563eb; --danger: #ef4444; --success: #10b981; 
             --warning: #f59e0b; --purple: #8b5cf6; --teal: #14b8a6;
@@ -61,14 +63,20 @@
         .btn-icon { background: var(--primary); color: white; border-radius: 50%; width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px;}
         .divider { height: 4px; background: var(--divider); cursor: row-resize; flex-shrink: 0;}
 
+        /* STREAMING_CHUNK:Styling Editor & Toolbar... */
         .toolbar { display: flex; gap: 10px; align-items: center; justify-content: space-between; background: var(--panel-bg); padding: 10px 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); flex-wrap: wrap;}
         .toolbar-group { display: flex; gap: 8px; align-items: center;}
         .btn-toggle { background: var(--hover-bg); color: var(--text-main); }
         .btn-toggle:hover { filter: brightness(0.9); color: var(--text-main); }
 
         .editor-container { display: flex; flex-direction: column; gap: 10px; flex: 1; background: var(--panel-bg); padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); min-height: 0;}
-        #chapterTitleInput { font-size: 20px; font-weight: bold; border: none; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; border-radius: 0; box-shadow: none; background: transparent;}
-        #chapterTitleInput:focus { border-bottom: 2px solid var(--primary); }
+        
+        /* Chỉnh sửa styling cho phần tiêu đề và bộ đếm từ */
+        .editor-header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-bottom: 5px; transition: border-color 0.3s;}
+        .editor-header:focus-within { border-bottom: 2px solid var(--primary); }
+        #chapterTitleInput { font-size: 20px; font-weight: bold; border: none; padding: 0; box-shadow: none; background: transparent; flex: 1;}
+        .word-count { font-size: 13px; color: var(--text-muted); font-weight: 600; white-space: nowrap; margin-left: 15px; background: var(--hover-bg); padding: 4px 8px; border-radius: 4px;}
+
         #chapterContentInput { flex: 1; resize: none; line-height: 1.7; padding: 10px 0; border: none; box-shadow: none; outline: none; background: transparent; color: var(--text-main); font-size: 16px;}
         
         .dict-list { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
@@ -77,6 +85,7 @@
         .dict-row button { background: rgba(239, 68, 68, 0.1); color: var(--danger); padding: 8px; }
         .dict-row button:hover { background: var(--danger); color: white; }
 
+        /* STREAMING_CHUNK:Styling Modal, Toast & Overlay... */
         .modal-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0, 0, 0, 0.5); display: none; justify-content: center; align-items: center; z-index: 2000; backdrop-filter: blur(2px);}
         .modal-box { background: var(--panel-bg); color: var(--text-main); padding: 25px; border-radius: 12px; width: 90%; max-width: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         .modal-box h3 { margin: 0 0 15px 0; font-size: 18px; }
@@ -105,6 +114,7 @@
 </head>
 <body>
 
+    <!-- STREAMING_CHUNK:Cấu trúc UI - Modal và Loading... -->
     <div id="loadingOverlay">
         <div class="spinner"></div>
         <span id="loadingText">Đang khởi tạo ứng dụng...</span>
@@ -123,7 +133,6 @@
         </div>
     </div>
 
-    <!-- Modal Thêm Chương -->
     <div id="addChapterModal" class="modal-overlay">
         <div class="modal-box">
             <h3>Thêm Chương Mới</h3>
@@ -150,7 +159,6 @@
         </div>
     </div>
 
-    <!-- Modal Cài đặt Giao diện -->
     <div id="displaySettingsModal" class="modal-overlay">
         <div class="modal-box">
             <h3>Cài Đặt Đọc & Hiển Thị</h3>
@@ -178,6 +186,7 @@
         </div>
     </div>
 
+    <!-- STREAMING_CHUNK:Cấu trúc UI - Sidebar Trái (Tủ truyện & Mục lục)... -->
     <div class="sidebar-left" id="sidebarLeft">
         <div class="panel-section" style="flex: 1;">
             <div class="panel-header">
@@ -213,6 +222,7 @@
         </div>
     </div>
 
+    <!-- STREAMING_CHUNK:Cấu trúc UI - Main Editor... -->
     <div class="main-content">
         <div class="toolbar">
             <div class="toolbar-group">
@@ -230,7 +240,11 @@
         </div>
         
         <div class="editor-container" id="editorArea" style="display: none;">
-            <input type="text" id="chapterTitleInput" placeholder="Tiêu đề chương">
+            <!-- Phần hiển thị Tiêu đề và Đếm từ -->
+            <div class="editor-header">
+                <input type="text" id="chapterTitleInput" placeholder="Tiêu đề chương">
+                <div class="word-count" title="Số lượng từ trong chương">📝 <span id="wordCountDisplay">0</span> từ</div>
+            </div>
             <textarea id="chapterContentInput" placeholder="Nội dung chương..."></textarea>
         </div>
         
@@ -241,6 +255,7 @@
         </div>
     </div>
 
+    <!-- STREAMING_CHUNK:Cấu trúc UI - Sidebar Phải (Từ Điển)... -->
     <div class="sidebar-right" id="sidebarRight">
         <div class="panel-header">
             <h3>⚙️ Từ Điển Thay Thế</h3>
@@ -261,6 +276,23 @@
     </div>
 
 <script>
+    /* STREAMING_CHUNK:Word Count Logic... */
+    // --- TÍNH NĂNG ĐẾM TỪ (WORD COUNT) ---
+    function updateWordCount() {
+        const text = document.getElementById('chapterContentInput').value;
+        // Xoá khoảng trắng ở hai đầu, thay thế nhiều khoảng trắng/xuống dòng thành 1 khoảng trắng
+        const cleanText = text.trim().replace(/\s+/g, ' ');
+        // Tính số từ
+        const wordCount = cleanText === '' ? 0 : cleanText.split(' ').length;
+        
+        // Cập nhật lên UI
+        document.getElementById('wordCountDisplay').innerText = wordCount.toLocaleString('vi-VN');
+    }
+
+    // Lắng nghe sự kiện gõ phím để cập nhật realtime
+    document.getElementById('chapterContentInput').addEventListener('input', updateWordCount);
+
+    /* STREAMING_CHUNK:Cài đặt Giao diện (Theme & Font Size)... */
     // --- CÀI ĐẶT GIAO DIỆN ---
     let displaySettings = JSON.parse(localStorage.getItem('displaySettings_V4')) || { fontSize: 16, theme: 'light' };
 
@@ -283,6 +315,7 @@
         applyDisplaySettings();
     }
 
+    /* STREAMING_CHUNK:Quản lý Modal và Toast... */
     // --- MODAL VÀ TOAST ---
     const AppModal = {
         show: function(message, type = 'info', onConfirm = null) {
@@ -331,8 +364,9 @@
     function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
     function toggleSidebar(sidebarId) { document.getElementById(sidebarId).classList.toggle('collapsed'); }
 
+    /* STREAMING_CHUNK:Database IndexedDB... */
     // --- DATABASE ---
-    const DB_NAME = 'TruyenEditorDB_V5';
+    const DB_NAME = 'TruyenEditorDB_V5'; // Giữ nguyên DB V5 để tương thích ngược dữ liệu
     const DB_VERSION = 1;
     let db;
     let bookshelf = [];      
@@ -387,6 +421,7 @@
         });
     }
 
+    /* STREAMING_CHUNK:Sao lưu và Khôi phục... */
     // --- SAO LƯU / KHÔI PHỤC BẰNG JSON ---
     async function exportBackup() {
         showLoading("Đang tạo tệp sao lưu...");
@@ -424,6 +459,7 @@
         event.target.value = ''; 
     }
 
+    /* STREAMING_CHUNK:Khởi tạo & Tủ Truyện... */
     // --- KHỞI TẠO & TỦ TRUYỆN ---
     window.onload = async () => {
         try {
@@ -490,9 +526,9 @@
         document.getElementById('editorArea').style.display = 'none';
     }
 
-    // --- CẮT TEXT VÀ ĐỌC FILE (THUẬT TOÁN THÔNG MINH V5) ---
+    /* STREAMING_CHUNK:Cắt Text và Đọc File... */
+    // --- CẮT TEXT VÀ ĐỌC FILE ---
     function splitTextIntoChapters(text) {
-        // Biểu thức mới: Bắt dòng có chữ Chương, Hồi, Tiết... và giới hạn độ dài < 120 ký tự (Không bắt buộc phải có số)
         const regex = /^((?:Chương|Hồi|Tiết|Phần|Quyển|Chương mới)\s*.{0,120})$/gim;
         let splits = text.split(regex);
         let chapters = [];
@@ -515,7 +551,6 @@
                     mammoth.extractRawText({ arrayBuffer: event.target.result })
                         .then(result => {
                             if (result.value.trim() === "") {
-                                // Fallback: Trích xuất nội dung từ file DOCX "giả" do html-docx-js tạo ra
                                 const fallbackReader = new FileReader();
                                 fallbackReader.onload = (e) => {
                                     const textContent = e.target.result;
@@ -526,18 +561,12 @@
                                             .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n')
                                             .replace(/<br[^>]*>/gi, '\n')
                                             .replace(/<[^>]+>/g, '');
-                                        // Giải mã các thực thể HTML (ví dụ: &amp;)
                                         const finalTxt = new DOMParser().parseFromString(cleanText, 'text/html').documentElement.textContent;
                                         resolve(splitTextIntoChapters(finalTxt));
-                                    } else {
-                                        // Nếu không phải chuẩn html-docx-js, cứ đọc thuần
-                                        resolve(splitTextIntoChapters(textContent));
-                                    }
+                                    } else resolve(splitTextIntoChapters(textContent));
                                 };
                                 fallbackReader.readAsText(file);
-                            } else {
-                                resolve(splitTextIntoChapters(result.value));
-                            }
+                            } else resolve(splitTextIntoChapters(result.value));
                         })
                         .catch(err => reject("Lỗi Mammoth: " + err));
                 };
@@ -565,6 +594,7 @@
         e.target.value = ''; 
     });
 
+    /* STREAMING_CHUNK:Thêm Chèn Chương... */
     // --- THÊM / CHÈN CHƯƠNG ---
     function openAddChapterModal() {
         if(!currentBookId) return AppModal.alert("Vui lòng mở truyện trước!");
@@ -605,6 +635,7 @@
         }
     }
 
+    /* STREAMING_CHUNK:Quản lý Nội dung, Cuộn trang và Save... */
     // --- QUẢN LÝ NỘI DUNG VÀ CUỘN LÊN ĐẦU TRANG ---
     function renderTOC() {
         const tocList = document.getElementById('tocList');
@@ -634,6 +665,7 @@
         document.getElementById('chapterContentInput').value = book.chapters[index].content;
 
         highlightCurrentChapter();
+        updateWordCount(); // Cập nhật đếm từ ngay khi load chương
 
         document.getElementById('chapterContentInput').scrollTop = 0;
         document.querySelector('.main-content').scrollTop = 0;
@@ -668,6 +700,7 @@
         if(currentChapterIndex < book.chapters.length - 1) loadChapter(currentChapterIndex + 1);
     }
 
+    /* STREAMING_CHUNK:Từ điển Thay thế... */
     // --- TỪ ĐIỂN ---
     function loadDictFromLocalStorage() {
         const saved = localStorage.getItem('novelDict_V5');
@@ -742,6 +775,7 @@
             await saveBookToDB(book); renderTOC();
             document.getElementById('chapterTitleInput').value = book.chapters[currentChapterIndex].title;
             document.getElementById('chapterContentInput').value = book.chapters[currentChapterIndex].content;
+            updateWordCount(); // Cập nhật lại số từ sau khi replace
             showToast(`Thay thế tự động: ${total} từ`);
         }
     }
@@ -768,12 +802,16 @@
                     await saveBookToDB(book);
                 }
                 await reloadBookshelf();
-                if (currentBookId) loadChapter(currentChapterIndex); 
+                if (currentBookId) {
+                    loadChapter(currentChapterIndex);
+                    updateWordCount(); // Cập nhật lại số từ
+                }
                 hideLoading(); AppModal.success(`Hoàn tất! Đã thay ${total} cụm từ trên toàn tủ.`);
             }, 100);
         });
     }
 
+    /* STREAMING_CHUNK:Xuất file TXT và DOCX... */
     // --- XUẤT FILE TXT/DOCX ĐỂ HOÀN THIỆN ---
     async function exportTxt() {
         if (!currentBookId) return AppModal.alert("Chọn truyện cần tải!");
@@ -805,3 +843,4 @@
 
 </body>
 </html>
+```eof
