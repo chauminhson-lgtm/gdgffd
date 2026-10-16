@@ -121,9 +121,19 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+        /* Chế độ tập trung (Zen Mode) */
+        body.zen-mode .sidebar-left, body.zen-mode .sidebar-right, body.zen-mode .toolbar { display: none !important; }
+        body.zen-mode .main-content { padding: 0; background: var(--bg-color); align-items: center; }
+        body.zen-mode .editor-container { max-width: 900px; width: 100%; height: 100vh; border-radius: 0; box-shadow: none; padding: 40px; margin: 0; border: none; }
+        .exit-zen-btn { display: none; position: fixed; top: 20px; right: 20px; z-index: 9999; background: var(--danger); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); opacity: 0.5; transition: 0.3s; font-weight: bold;}
+        .exit-zen-btn:hover { opacity: 1; }
+        body.zen-mode .exit-zen-btn { display: flex; }
     </style>
 </head>
 <body>
+
+    <button class="exit-zen-btn" onclick="toggleZenMode()">Thoát Zen Mode (Esc)</button>
 
     <div id="loadingOverlay"><div class="spinner"></div><span id="loadingText">Đang khởi tạo...</span></div>
     <div id="toast" class="toast"><span>✅</span> <span id="toastText">Thông báo</span></div>
@@ -260,11 +270,12 @@
         <div class="toolbar">
             <div class="toolbar-group">
                 <button class="btn-toggle" onclick="toggleSidebar('sidebarLeft')" title="Ẩn/Hiện Tủ Truyện">☰ Tủ Truyện</button>
-                <button onclick="prevChapter()" style="margin-left: 5px;" title="Phím tắt: Ctrl + Mũi tên trái">&#8592; Trước</button>
-                <button onclick="nextChapter()" title="Phím tắt: Ctrl + Mũi tên phải">Sau &#8594;</button>
-                <button onclick="manualSaveCurrent()" style="background: var(--success); margin-left: 5px;" title="Phím tắt: Ctrl + S">💾 Lưu Chương Này</button>
+                <button onclick="prevChapter()" style="margin-left: 5px;">&#8592; Trước</button>
+                <button onclick="nextChapter()">Sau &#8594;</button>
+                <button onclick="manualSaveCurrent()" style="background: var(--success); margin-left: 5px;">💾 Lưu Chương Này</button>
             </div>
             <div class="toolbar-group">
+                <button onclick="toggleZenMode()" style="background: var(--purple);" title="Phím tắt: F11 hoặc Esc để thoát">🧘 Zen Mode</button>
                 <button onclick="document.getElementById('displaySettingsModal').style.display='flex'" style="background: var(--teal);">Hiển thị 👁️</button>
                 <button onclick="exportTxt()" style="background: #475569;">Xuất TXT</button>
                 <button onclick="exportDocx()" style="background: #2563eb;">Xuất DOCX</button>
@@ -341,15 +352,14 @@
             e.preventDefault();
             nextChapter();
         }
+        // Phím Esc: Thoát Zen Mode
+        if (e.key === 'Escape' && document.body.classList.contains('zen-mode')) {
+            toggleZenMode();
+        }
     });
 
-    // --- HỆ THỐNG SMART SCANNER ---
-    function openScannerModal() {
-        if (!currentBookId) return AppModal.alert("Vui lòng mở một truyện trước khi dùng AI Quét!");
-        const savedKey = localStorage.getItem('geminiApiKey_V8') || '';
-        document.getElementById('geminiApiKeyInput').value = savedKey;
-        document.getElementById('scannerResultsContainer').style.display = 'none';
-        document.getElementById('scannerModal').style.display = 'flex';
+    function toggleZenMode() {
+        document.body.classList.toggle('zen-mode');
     }
 
     async function saveApiKeyAndScan() {
@@ -757,6 +767,7 @@
             const chapters = await parseFileToChapters(file);
             const newBook = { id: Date.now().toString(), title: bookTitle, chapters: chapters };
             await saveBookToDB(newBook); await reloadBookshelf(); await openBook(newBook.id);
+            await autoReplaceCurrentBookSilently(); // Tự động quét từ điển cho truyện mới tải lên
             hideLoading(); AppModal.success(`Đã thêm truyện "${bookTitle}" (${chapters.length} chương)!`);
         } catch(err) { hideLoading(); AppModal.alert("Lỗi: " + err); }
         e.target.value = ''; 
@@ -786,6 +797,7 @@
             if (insertIndex < 0) insertIndex = 0;
             book.chapters.splice(insertIndex, 0, ...newChapters);
             await saveBookToDB(book); renderTOC(); loadChapter(insertIndex); 
+            await autoReplaceCurrentBookSilently(); // Tự động thay thế từ điển ngay khi có chương mới
             hideLoading(); showToast(`Đã chèn ${newChapters.length} chương!`);
         }
     }
@@ -809,7 +821,19 @@
         document.getElementById('chapterTitleInput').value = book.chapters[index].title;
         document.getElementById('chapterContentInput').value = book.chapters[index].content;
         highlightCurrentChapter(); updateWordCount();
-        document.getElementById('chapterContentInput').scrollTop = 0; document.querySelector('.main-content').scrollTop = 0;
+        
+        // Phục hồi vị trí cuộn chuột và con trỏ
+        const contentInput = document.getElementById('chapterContentInput');
+        const savedScroll = book.chapters[index].scrollTop || 0;
+        const savedCursor = book.chapters[index].cursorPos || 0;
+        
+        setTimeout(() => {
+            contentInput.scrollTop = savedScroll;
+            contentInput.setSelectionRange(savedCursor, savedCursor);
+            contentInput.focus();
+        }, 10);
+        
+        document.querySelector('.main-content').scrollTop = 0;
     }
     function highlightCurrentChapter() {
         const items = document.getElementById('tocList').children;
@@ -821,8 +845,15 @@
     async function saveCurrentToDB(showNotification = false) {
         if (!currentBookId || currentChapterIndex === -1) return;
         const book = bookshelf.find(b => b.id === currentBookId);
+        const contentInput = document.getElementById('chapterContentInput');
+        
         book.chapters[currentChapterIndex].title = document.getElementById('chapterTitleInput').value;
-        book.chapters[currentChapterIndex].content = document.getElementById('chapterContentInput').value;
+        book.chapters[currentChapterIndex].content = contentInput.value;
+        
+        // Lưu lại vị trí cuộn và con trỏ trước khi chuyển chương
+        book.chapters[currentChapterIndex].scrollTop = contentInput.scrollTop;
+        book.chapters[currentChapterIndex].cursorPos = contentInput.selectionStart;
+
         await saveBookToDB(book);
         const tocItems = document.getElementById('tocList').children;
         if(tocItems[currentChapterIndex]) tocItems[currentChapterIndex].querySelector('.item-text').innerText = book.chapters[currentChapterIndex].title;
@@ -881,9 +912,21 @@
         await saveCurrentToDB(false); const book = bookshelf.find(b => b.id === currentBookId); let total = 0;
         book.chapters.forEach(chap => {
             validPairs.forEach(pair => {
-                const escapedFind = pair.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); const regex = new RegExp(escapedFind, 'g');
+                const escapedFind = pair.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
+                const regex = new RegExp(escapedFind, 'gi'); // Thêm cờ 'i' để không phân biệt hoa thường
+                
                 const m = (chap.content.match(regex) || []).length + (chap.title.match(regex) || []).length; total += m;
-                chap.title = chap.title.replace(regex, pair.replace); chap.content = chap.content.replace(regex, pair.replace);
+                
+                // Hàm thay thế thông minh: giữ nguyên viết hoa nếu từ gốc viết hoa
+                const smartReplace = (match) => {
+                    if (match[0] === match[0].toUpperCase()) {
+                        return pair.replace.charAt(0).toUpperCase() + pair.replace.slice(1);
+                    }
+                    return pair.replace;
+                };
+
+                chap.title = chap.title.replace(regex, smartReplace); 
+                chap.content = chap.content.replace(regex, smartReplace);
             });
         });
         if (total > 0) {
@@ -905,9 +948,17 @@
                     let book = bookshelf[i];
                     book.chapters.forEach(chap => {
                         validPairs.forEach(pair => {
-                            const escapedFind = pair.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); const regex = new RegExp(escapedFind, 'g');
+                            const escapedFind = pair.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
+                            const regex = new RegExp(escapedFind, 'gi'); // Không phân biệt hoa thường
                             total += (chap.content.match(regex) || []).length + (chap.title.match(regex) || []).length;
-                            chap.title = chap.title.replace(regex, pair.replace); chap.content = chap.content.replace(regex, pair.replace);
+                            
+                            const smartReplace = (match) => {
+                                if (match[0] === match[0].toUpperCase()) return pair.replace.charAt(0).toUpperCase() + pair.replace.slice(1);
+                                return pair.replace;
+                            };
+
+                            chap.title = chap.title.replace(regex, smartReplace); 
+                            chap.content = chap.content.replace(regex, smartReplace);
                         });
                     });
                     await saveBookToDB(book);
