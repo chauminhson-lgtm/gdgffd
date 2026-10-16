@@ -259,6 +259,7 @@
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <h3>📖 Mục Lục</h3>
                     <button class="btn-icon" onclick="openAddChapterModal()" title="Thêm chương">+</button>
+                    <button class="btn-icon" style="background: var(--danger); font-size: 14px; width: auto; padding: 0 8px; border-radius: 6px;" onclick="deleteSelectedChapters()" title="Xóa các chương đã chọn">🗑️ Xóa</button>
                 </div>
                 <span id="currentBookLabel" style="font-size: 12px; color: var(--primary); font-weight: normal; max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></span>
             </div>
@@ -807,8 +808,13 @@
         if (!currentBookId) return;
         const book = bookshelf.find(b => b.id === currentBookId);
         book.chapters.forEach((chap, index) => {
-            const li = document.createElement('li'); li.className = 'list-item'; li.innerHTML = `<span class="item-text" title="${chap.title}">${chap.title}</span>`;
-            li.onclick = async () => { await saveCurrentToDB(false); loadChapter(index); }; tocList.appendChild(li);
+            const li = document.createElement('li'); li.className = 'list-item'; 
+            li.innerHTML = `
+                <input type="checkbox" class="chap-checkbox" value="${index}" onclick="event.stopPropagation()" style="margin-right: 8px; cursor: pointer;">
+                <span class="item-text" title="${chap.title}">${chap.title}</span>
+            `;
+            li.onclick = async () => { await saveCurrentToDB(false); loadChapter(index); }; 
+            tocList.appendChild(li);
         });
         highlightCurrentChapter();
     }
@@ -842,6 +848,47 @@
             if (i === currentChapterIndex) items[i].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
     }
+
+    async function deleteSelectedChapters() {
+        if (!currentBookId) return;
+        const checkboxes = document.querySelectorAll('.chap-checkbox:checked');
+        if (checkboxes.length === 0) return AppModal.alert("Vui lòng tích chọn ít nhất 1 chương để xóa!");
+        
+        AppModal.confirm(`Bạn có chắc chắn muốn xóa ${checkboxes.length} chương đã chọn? Hành động này không thể hoàn tác.`, async () => {
+            showLoading("Đang xóa chương...");
+            const book = bookshelf.find(b => b.id === currentBookId);
+            
+            // Lấy index các chương cần xóa và sắp xếp giảm dần để xóa từ dưới lên không bị lệch index
+            const indicesToDelete = Array.from(checkboxes).map(cb => parseInt(cb.value)).sort((a, b) => b - a);
+            
+            indicesToDelete.forEach(index => {
+                book.chapters.splice(index, 1);
+            });
+            
+            await saveBookToDB(book);
+            
+            if (book.chapters.length === 0) {
+                clearEditor(); // Xóa hết thì dọn sạch editor
+            } else {
+                if (indicesToDelete.includes(currentChapterIndex)) {
+                    loadChapter(0); // Nếu chương đang đọc bị xóa thì quay về chương 1
+                } else {
+                    // Cập nhật lại vị trí index của chương đang mở do các chương trước nó bị xóa
+                    let newIndex = currentChapterIndex;
+                    indicesToDelete.forEach(deletedIndex => {
+                        if (deletedIndex < currentChapterIndex) newIndex--;
+                    });
+                    currentChapterIndex = newIndex;
+                    loadChapter(currentChapterIndex);
+                }
+            }
+            
+            renderTOC();
+            hideLoading();
+            showToast(`Đã xóa thành công ${checkboxes.length} chương!`);
+        });
+    }
+
     async function saveCurrentToDB(showNotification = false) {
         if (!currentBookId || currentChapterIndex === -1) return;
         const book = bookshelf.find(b => b.id === currentBookId);
