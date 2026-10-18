@@ -363,6 +363,15 @@
         document.body.classList.toggle('zen-mode');
     }
 
+    function openScannerModal() {
+        if (!currentBookId) return AppModal.alert("Vui lòng mở một truyện trước khi dùng AI Quét!");
+        const savedKey = localStorage.getItem('geminiApiKey_V8') || '';
+        document.getElementById('geminiApiKeyInput').value = savedKey;
+        document.getElementById('scannerResultsContainer').style.display = 'none';
+        document.getElementById('scanLoadingBox').style.display = 'none';
+        document.getElementById('scannerModal').style.display = 'flex';
+    }
+
     async function saveApiKeyAndScan() {
         const apiKey = document.getElementById('geminiApiKeyInput').value.trim();
         localStorage.setItem('geminiApiKey_V8', apiKey);
