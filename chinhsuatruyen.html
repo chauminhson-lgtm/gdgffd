@@ -244,12 +244,6 @@
                     <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="importBackup(event)">
                 </div>
 
-                <div id="cloudSyncStatus" style="font-size: 11px; color: var(--primary); font-weight: bold; margin-bottom: 8px; text-align: center;">☁️ TÀI KHOẢN GOOGLE: ĐANG KẾT NỐI...</div>
-                <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-                    <button onclick="backupToCloud()" style="flex: 1; background: #2563eb; font-size: 12px;" title="Lưu tủ truyện lên Đám mây Google">☁️ Đồng Bộ Lên</button>
-                    <button onclick="restoreFromCloud()" style="flex: 1; background: #10b981; font-size: 12px;" title="Tải dữ liệu từ Đám mây">☁️ Tải Đồng Bộ</button>
-                </div>
-
                 <hr style="margin: 10px 0; border: none; border-top: 1px dashed var(--border-color);">
                 <label style="font-size: 12px; font-weight: bold; color: var(--text-muted); display: block; margin-bottom: 5px;">+ THÊM TRUYỆN MỚI:</label>
                 <input type="file" id="fileInput" accept=".txt,.docx" style="width: 100%; font-size: 13px;">
@@ -326,12 +320,6 @@
     </div>
 
 <script>
-    // Biến cho Firebase Cloud Auth & Database
-    let dbCloud = null;
-    let authCloud = null;
-    let currentUser = null;
-    let fsTools = null; // Firestore modules
-
     // Biến nội bộ
     const DB_NAME = 'TruyenEditorDB_V5'; 
     const DB_VERSION = 1;
@@ -415,50 +403,11 @@
             await initDB(); 
             await reloadBookshelf();
             hideLoading(); 
-            
-            // Chạy ẩn khởi tạo Firebase Google Login (Thông qua Custom Token)
-            initFirebaseCloud();
         } catch (e) { 
             hideLoading(); 
             AppModal.alert("Lỗi khởi tạo ứng dụng: " + e.message); 
         }
     };
-
-    async function initFirebaseCloud() {
-        try {
-            const firebaseApp = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
-            const firebaseAuth = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
-            const firebaseFirestore = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
-            
-            fsTools = firebaseFirestore;
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-truyen-app';
-            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-            
-            if (firebaseConfig) {
-                const app = firebaseApp.initializeApp(firebaseConfig);
-                dbCloud = fsTools.getFirestore(app);
-                authCloud = firebaseAuth.getAuth(app);
-                
-                const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-                if (token) {
-                    const cred = await firebaseAuth.signInWithCustomToken(authCloud, token);
-                    currentUser = cred.user;
-                    document.getElementById('cloudSyncStatus').innerText = "☁️ TÀI KHOẢN GOOGLE: ĐÃ KẾT NỐI";
-                } else {
-                    const cred = await firebaseAuth.signInAnonymously(authCloud);
-                    currentUser = cred.user;
-                    document.getElementById('cloudSyncStatus').innerText = "☁️ ĐÁM MÂY: CHẾ ĐỘ ẨN DANH";
-                }
-            } else {
-                document.getElementById('cloudSyncStatus').innerText = "☁️ ĐÁM MÂY: CHƯA CẤU HÌNH (DÙNG CỤC BỘ)";
-                document.getElementById('cloudSyncStatus').style.color = "var(--text-muted)";
-            }
-        } catch(err) {
-            console.warn("Không thể kết nối Firebase: ", err);
-            document.getElementById('cloudSyncStatus').innerText = "☁️ ĐÁM MÂY: KHÔNG THỂ KẾT NỐI";
-            document.getElementById('cloudSyncStatus').style.color = "var(--danger)";
-        }
-    }
 
     function initDB() {
         return new Promise((resolve, reject) => {
@@ -497,55 +446,6 @@
             const tx = db.transaction('books', 'readwrite');
             tx.objectStore('books').clear();
             tx.oncomplete = () => resolve(); tx.onerror = (e) => reject(e.target.error);
-        });
-    }
-
-    async function backupToCloud() {
-        if (!currentUser || !dbCloud || !fsTools) return AppModal.alert("Hệ thống đám mây chưa sẵn sàng. Đang kết nối...");
-        showLoading("Đang đẩy tủ truyện lên Đám Mây...");
-        try {
-            const allBooks = await getAllBooksFromDB();
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-truyen-app';
-            
-            for (let book of allBooks) {
-                const docRef = fsTools.doc(dbCloud, 'artifacts', appId, 'users', currentUser.uid, 'books', book.id);
-                await fsTools.setDoc(docRef, book);
-            }
-            hideLoading();
-            AppModal.success(`Đã sao lưu ${allBooks.length} truyện lên Tài khoản Google của bạn an toàn!`);
-        } catch(e) {
-            hideLoading();
-            AppModal.alert("Lỗi sao lưu đám mây: " + e.message);
-        }
-    }
-
-    async function restoreFromCloud() {
-        if (!currentUser || !dbCloud || !fsTools) return AppModal.alert("Hệ thống đám mây chưa sẵn sàng. Đang kết nối...");
-        AppModal.confirm("Phục hồi từ Đám Mây sẽ XÓA TẤT CẢ các truyện hiện có và GHI ĐÈ bằng bản sao lưu. Tiếp tục?", async () => {
-            showLoading("Đang tải dữ liệu từ Đám Mây...");
-            try {
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-truyen-app';
-                const colRef = fsTools.collection(dbCloud, 'artifacts', appId, 'users', currentUser.uid, 'books');
-                const snapshot = await fsTools.getDocs(colRef);
-                
-                if (snapshot.empty) {
-                    hideLoading();
-                    return AppModal.alert("Không tìm thấy bản sao lưu nào trên Đám Mây của tài khoản này.");
-                }
-                
-                await clearAllBooksDB();
-                for (let docSnap of snapshot.docs) {
-                    await saveBookToDB(docSnap.data());
-                }
-                
-                await reloadBookshelf();
-                clearEditor();
-                hideLoading();
-                AppModal.success("Phục hồi dữ liệu từ Đám Mây thành công!");
-            } catch(e) {
-                hideLoading();
-                AppModal.alert("Lỗi tải đám mây: " + e.message);
-            }
         });
     }
 
@@ -598,7 +498,9 @@
     
     async function openBook(id) {
         await saveCurrentToDB(false); 
-        currentBookId = id; currentChapterIndex = 0; renderBookshelf(); 
+        currentBookId = id; 
+        currentChapterIndex = -1; // Reset vị trí chương để tránh kẹt bộ nhớ
+        renderBookshelf(); 
         
         const book = bookshelf.find(b => b.id === currentBookId);
         document.getElementById('currentBookLabel').innerText = book.title; 
@@ -608,7 +510,16 @@
         dictPairs = book.dictPairs || [];
         renderDict();
 
-        renderTOC(); loadChapter(0);
+        renderTOC(); 
+        if (book.chapters && book.chapters.length > 0) {
+            loadChapter(0);
+        } else {
+            // Xóa sạch ô text nếu truyện trống
+            document.getElementById('chapterTitleInput').value = '';
+            document.getElementById('chapterContentInput').value = '';
+            document.getElementById('welcomeMessage').style.display = 'block'; 
+            document.getElementById('editorArea').style.display = 'none';
+        }
     }
     
     function confirmDeleteBook(id, title) {
@@ -621,6 +532,11 @@
     function clearEditor() {
         currentBookId = null; currentChapterIndex = -1; dictPairs = []; renderDict();
         document.getElementById('currentBookLabel').innerText = ''; document.getElementById('tocList').innerHTML = '';
+        
+        // Đảm bảo không còn lưu rác văn bản trên khung hiển thị
+        document.getElementById('chapterTitleInput').value = '';
+        document.getElementById('chapterContentInput').value = '';
+        
         document.getElementById('welcomeMessage').style.display = 'block'; document.getElementById('editorArea').style.display = 'none';
     }
 
