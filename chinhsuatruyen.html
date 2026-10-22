@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trình Chỉnh Sửa Truyện Pro - V9.1 (Cloud Sync & Dict Độc lập)</title>
-    <!-- Thư viện đọc file Word, xuất Docx và lưu file -->
+    <title>Trình Chỉnh Sửa Truyện Pro - V9.5 (Final Offline & Dict Độc lập)</title>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
     <script src="https://unpkg.com/html-docx-js@0.3.1/dist/html-docx.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -148,7 +148,7 @@
         </div>
     </div>
 
-    <!-- MODAL QUÉT TÊN RIÊNG (SMART SCANNER) -->
+    <!-- MODAL QUÉT TÊN RIÊNG -->
     <div id="scannerModal" class="modal-overlay">
         <div class="modal-box">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
@@ -171,9 +171,7 @@
                 <div id="scanProgressText" style="font-size: 13px; font-weight: bold;">Đang phân tích dữ liệu...</div>
             </div>
             
-            <div class="scanner-results" id="scannerResultsContainer" style="display: none;">
-                <!-- Dữ liệu Accordion sẽ render ở đây -->
-            </div>
+            <div class="scanner-results" id="scannerResultsContainer" style="display: none;"></div>
 
             <div class="modal-actions">
                 <button class="btn-cancel" onclick="document.getElementById('scannerModal').style.display='none'">Đóng cửa sổ</button>
@@ -181,6 +179,7 @@
         </div>
     </div>
 
+    <!-- MODAL THÊM CHƯƠNG -->
     <div id="addChapterModal" class="modal-overlay">
         <div class="modal-box">
             <h3>Thêm Chương Mới</h3>
@@ -207,6 +206,7 @@
         </div>
     </div>
 
+    <!-- MODAL HIỂN THỊ -->
     <div id="displaySettingsModal" class="modal-overlay">
         <div class="modal-box">
             <h3>Cài Đặt Đọc & Hiển Thị</h3>
@@ -231,19 +231,41 @@
         </div>
     </div>
 
+    <!-- MODAL XUẤT FILE -->
+    <div id="exportModal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 id="exportModalTitle">Xuất File Truyện</h3>
+            <div style="background: var(--head-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 15px;">
+                <div class="radio-group">
+                    <label><input type="radio" name="exportRange" value="all" checked onchange="toggleExportInputs()"> Xuất toàn bộ chương</label>
+                    <label><input type="radio" name="exportRange" value="custom" onchange="toggleExportInputs()"> Tùy chọn số chương</label>
+                </div>
+                <div id="exportCustomInputs" style="display: none; margin-top: 10px; gap: 10px; align-items: center;">
+                    <span style="font-size: 14px;">Từ:</span>
+                    <select id="exportStart" style="flex: 1; min-width: 100px; font-size: 13px;"></select>
+                    <span style="font-size: 14px;">Đến:</span>
+                    <select id="exportEnd" style="flex: 1; min-width: 100px; font-size: 13px;"></select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="document.getElementById('exportModal').style.display='none'">Hủy</button>
+                <button onclick="confirmExport()" style="background: var(--primary);">Xác nhận Xuất</button>
+            </div>
+        </div>
+    </div>
+
     <div class="sidebar-left" id="sidebarLeft">
         <div class="panel-section" style="flex: 1;">
             <div class="panel-header">
                 <h3>📚 Tủ Truyện</h3>
             </div>
             <div style="padding: 10px 15px; border-bottom: 1px solid var(--border-color); background: var(--head-bg);">
-                <div style="font-size: 11px; color: var(--danger); font-weight: bold; margin-bottom: 8px; text-align: center;">💾 LƯU TRỮ CỤC BỘ (.JSON)</div>
-                <div style="display: flex; gap: 8px; margin-bottom: 15px;">
-                    <button onclick="exportBackup()" style="flex: 1; background: var(--purple); font-size: 12px;">↓ Tải Sao Lưu</button>
-                    <button onclick="document.getElementById('restoreInput').click()" style="flex: 1; background: var(--teal); font-size: 12px;">↑ Phục Hồi</button>
+                <div style="font-size: 11px; color: var(--danger); font-weight: bold; margin-bottom: 8px; text-align: center;">⚡ DÙNG KHÔI PHỤC (.JSON) ĐỂ TIẾP TỤC</div>
+                <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                    <button onclick="exportBackup()" style="flex: 1; background: var(--purple); font-size: 12px;">💾 Sao lưu</button>
+                    <button onclick="document.getElementById('restoreInput').click()" style="flex: 1; background: var(--teal); font-size: 12px;">📂 Khôi phục</button>
                     <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="importBackup(event)">
                 </div>
-
                 <hr style="margin: 10px 0; border: none; border-top: 1px dashed var(--border-color);">
                 <label style="font-size: 12px; font-weight: bold; color: var(--text-muted); display: block; margin-bottom: 5px;">+ THÊM TRUYỆN MỚI:</label>
                 <input type="file" id="fileInput" accept=".txt,.docx" style="width: 100%; font-size: 13px;">
@@ -258,7 +280,7 @@
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <h3>📖 Mục Lục</h3>
                     <button class="btn-icon" onclick="openAddChapterModal()" title="Thêm chương">+</button>
-                    <button class="btn-icon" style="background: var(--danger); font-size: 14px; width: auto; padding: 0 8px; border-radius: 6px;" onclick="deleteSelectedChapters()" title="Xóa các chương đã chọn">🗑️ Xóa</button>
+                    <button class="delete-btn" onclick="deleteSelectedChapters()" title="Xóa các chương đã chọn" style="margin-left: 0; padding: 4px 8px; font-size: 14px;">🗑️ Xóa</button>
                 </div>
                 <span id="currentBookLabel" style="font-size: 12px; color: var(--primary); font-weight: normal; max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></span>
             </div>
@@ -272,13 +294,13 @@
                 <button class="btn-toggle" onclick="toggleSidebar('sidebarLeft')" title="Ẩn/Hiện Tủ Truyện">☰ Tủ Truyện</button>
                 <button onclick="prevChapter()" style="margin-left: 5px;">&#8592; Trước</button>
                 <button onclick="nextChapter()">Sau &#8594;</button>
-                <button onclick="manualSaveCurrent()" style="background: var(--success); margin-left: 5px;" title="Phím tắt: Ctrl + S">💾 Lưu Chương Này</button>
+                <button onclick="manualSaveCurrent()" style="background: var(--success); margin-left: 5px;" title="Phím tắt: Ctrl + S">💾 Lưu Chương</button>
+                <button onclick="toggleZenMode()" style="background: var(--purple); margin-left: 5px;" title="Phím tắt: Esc để thoát">🧘 Zen Mode</button>
             </div>
             <div class="toolbar-group">
-                <button onclick="toggleZenMode()" style="background: var(--purple);" title="Phím tắt: F11 hoặc Esc để thoát">🧘 Zen Mode</button>
                 <button onclick="document.getElementById('displaySettingsModal').style.display='flex'" style="background: var(--teal);">Hiển thị 👁️</button>
-                <button onclick="exportTxt()" style="background: #475569;">Xuất TXT</button>
-                <button onclick="exportDocx()" style="background: #2563eb;">Xuất DOCX</button>
+                <button onclick="openExportModal('txt')" style="background: #475569;">Xuất TXT</button>
+                <button onclick="openExportModal('docx')" style="background: #2563eb;">Xuất DOCX</button>
                 <button class="btn-toggle" onclick="toggleSidebar('sidebarRight')" style="margin-left: 5px;">Từ Điển ⚙️</button>
             </div>
         </div>
@@ -310,7 +332,7 @@
             
             <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px; display: block;">Tải file txt (Từ cũ=Từ mới)</label>
             <input type="file" id="dictInput" accept=".txt" style="width: 100%; font-size: 13px; margin-bottom: 10px;">
-            <div style="font-size: 11px; color: var(--success); margin-bottom: 15px; font-weight: bold;">⚡ Tự động thay thế ngay khi nhập từ.</div>
+            <div style="font-size: 11px; color: var(--success); margin-bottom: 15px; font-weight: bold;">⚡ Tự động thay thế không phân biệt HOA/thường.</div>
             <button onclick="applyDictionaryManual()" style="width: 100%; background: var(--warning); color: #000; font-weight: bold; font-size: 13px; padding: 8px;">Quét toàn bộ Truyện Đang Đọc</button>
         </div>
         <div class="dict-list" id="dictList"></div>
@@ -320,12 +342,73 @@
     </div>
 
 <script>
-    // Biến nội bộ
-    const DB_NAME = 'TruyenEditorDB_V5'; 
+    const DB_NAME = 'TruyenEditorDB_Final'; 
     const DB_VERSION = 1;
-    let db; let bookshelf = []; let currentBookId = null; let currentChapterIndex = -1; let dictPairs = [];
+    let db = null; 
+    let bookshelf = []; 
+    let currentBookId = null; 
+    let currentChapterIndex = -1; 
+    let dictPairs = [];
 
-    // --- BỔ SUNG CÁC HÀM TIỆN ÍCH GIAO DIỆN BỊ THIẾU ---
+    // Chốt chặn an toàn: Ngăn lỗi undefined db
+    function getDB() {
+        if (!db) throw new Error("Hệ thống lưu trữ chưa sẵn sàng. Vui lòng thử tải lại trang (F5) hoặc tắt chế độ Ẩn danh.");
+        return db;
+    }
+
+    function initDB() {
+        return new Promise((resolve, reject) => {
+            if (!window.indexedDB) return reject(new Error("Trình duyệt của bạn không hỗ trợ lưu trữ cục bộ (IndexedDB)."));
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            request.onupgradeneeded = (e) => {
+                let database = e.target.result;
+                if (!database.objectStoreNames.contains('books')) database.createObjectStore('books', { keyPath: 'id' });
+            };
+            request.onsuccess = (e) => { db = e.target.result; resolve(); };
+            request.onerror = (e) => reject(new Error("Bị chặn quyền truy cập Database."));
+        });
+    }
+
+    function saveBookToDB(book) {
+        return new Promise((resolve, reject) => {
+            try {
+                const tx = getDB().transaction('books', 'readwrite');
+                tx.objectStore('books').put(book);
+                tx.oncomplete = () => resolve(); tx.onerror = (e) => reject(e.target.error);
+            } catch(e) { reject(e); }
+        });
+    }
+    
+    function getAllBooksFromDB() {
+        return new Promise((resolve, reject) => {
+            try {
+                const tx = getDB().transaction('books', 'readonly');
+                const request = tx.objectStore('books').getAll();
+                request.onsuccess = () => resolve(request.result); request.onerror = (e) => reject(e.target.error);
+            } catch(e) { reject(e); }
+        });
+    }
+    
+    function deleteBookFromDB(id) {
+        return new Promise((resolve, reject) => {
+            try {
+                const tx = getDB().transaction('books', 'readwrite');
+                tx.objectStore('books').delete(id);
+                tx.oncomplete = () => resolve(); tx.onerror = (e) => reject(e.target.error);
+            } catch(e) { reject(e); }
+        });
+    }
+    
+    function clearAllBooksDB() {
+        return new Promise((resolve, reject) => {
+            try {
+                const tx = getDB().transaction('books', 'readwrite');
+                tx.objectStore('books').clear();
+                tx.oncomplete = () => resolve(); tx.onerror = (e) => reject(e.target.error);
+            } catch(e) { reject(e); }
+        });
+    }
+
     let toastTimeout;
     function showToast(message) {
         const toast = document.getElementById('toast');
@@ -334,18 +417,15 @@
         clearTimeout(toastTimeout);
         toastTimeout = setTimeout(() => toast.classList.remove('show'), 3000);
     }
-
     function showLoading(text) { 
         document.getElementById('loadingText').innerText = text || 'Đang xử lý...'; 
         document.getElementById('loadingOverlay').style.display = 'flex'; 
     }
-
-    function hideLoading() { 
-        document.getElementById('loadingOverlay').style.display = 'none'; 
-    }
-
+    function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
+    
     function toggleSidebar(id) {
-        document.getElementById(id).classList.toggle('collapsed');
+        const el = document.getElementById(id);
+        if(el) el.classList.toggle('collapsed');
     }
 
     const AppModal = {
@@ -374,28 +454,20 @@
         success: function(msg) { this.show(msg, 'success'); },
         confirm: function(msg, callback) { this.show(msg, 'confirm', callback); }
     };
-    // --- KẾT THÚC BỔ SUNG CÁC HÀM TIỆN ÍCH ---
 
     window.addEventListener('error', function(e) {
         hideLoading();
         console.error("Lỗi hệ thống: ", e.message);
-        AppModal.alert("Đã xảy ra lỗi: " + e.message);
+        AppModal.alert("Lỗi hệ thống: " + e.message);
     });
 
     window.addEventListener('unhandledrejection', function(e) {
         hideLoading();
         console.error("Lỗi Promise: ", e.reason);
+        if (e.reason && e.reason.message && e.reason.message.includes('Hệ thống lưu trữ chưa sẵn sàng')) {
+            AppModal.alert(e.reason.message);
+        }
     });
-
-    document.addEventListener('keydown', function(e) {
-        if (!currentBookId) return;
-        if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); manualSaveCurrent(); }
-        if (e.ctrlKey && e.key === 'ArrowLeft') { e.preventDefault(); prevChapter(); }
-        if (e.ctrlKey && e.key === 'ArrowRight') { e.preventDefault(); nextChapter(); }
-        if (e.key === 'Escape' && document.body.classList.contains('zen-mode')) { toggleZenMode(); }
-    });
-
-    function toggleZenMode() { document.body.classList.toggle('zen-mode'); }
 
     window.onload = async () => {
         try { 
@@ -405,59 +477,20 @@
             hideLoading(); 
         } catch (e) { 
             hideLoading(); 
-            AppModal.alert("Lỗi khởi tạo ứng dụng: " + e.message); 
+            AppModal.alert("Lỗi khởi tạo: " + e.message); 
         }
     };
-
-    function initDB() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, DB_VERSION);
-            request.onupgradeneeded = (e) => {
-                let database = e.target.result;
-                if (!database.objectStoreNames.contains('books')) database.createObjectStore('books', { keyPath: 'id' });
-            };
-            request.onsuccess = (e) => { db = e.target.result; resolve(); };
-            request.onerror = (e) => reject(e.target.error);
-        });
-    }
-    function saveBookToDB(book) {
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction('books', 'readwrite');
-            tx.objectStore('books').put(book);
-            tx.oncomplete = () => resolve(); tx.onerror = (e) => reject(e.target.error);
-        });
-    }
-    function getAllBooksFromDB() {
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction('books', 'readonly');
-            const request = tx.objectStore('books').getAll();
-            request.onsuccess = () => resolve(request.result); request.onerror = (e) => reject(e.target.error);
-        });
-    }
-    function deleteBookFromDB(id) {
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction('books', 'readwrite');
-            tx.objectStore('books').delete(id);
-            tx.oncomplete = () => resolve(); tx.onerror = (e) => reject(e.target.error);
-        });
-    }
-    function clearAllBooksDB() {
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction('books', 'readwrite');
-            tx.objectStore('books').clear();
-            tx.oncomplete = () => resolve(); tx.onerror = (e) => reject(e.target.error);
-        });
-    }
 
     async function exportBackup() {
         showLoading("Đang tạo file sao lưu offline...");
         try {
             const allBooks = await getAllBooksFromDB();
-            const backupData = { version: 9.1, timestamp: new Date().toISOString(), books: allBooks };
+            const backupData = { version: 9.5, timestamp: new Date().toISOString(), books: allBooks };
             saveAs(new Blob([JSON.stringify(backupData)], { type: "application/json" }), `TuTruyenOffline_${new Date().toISOString().slice(0,10)}.json`);
             hideLoading(); AppModal.success("Tải xuống bản sao lưu thành công!");
         } catch (err) { hideLoading(); AppModal.alert("Lỗi khi sao lưu: " + err); }
     }
+    
     function importBackup(event) {
         const file = event.target.files[0]; if (!file) return;
         AppModal.confirm("Khôi phục file sẽ GHI ĐÈ toàn bộ Tủ truyện hiện tại. Chắc chắn tiếp tục?", async () => {
@@ -472,18 +505,22 @@
                         for(let book of data.books) await saveBookToDB(book);
                         await reloadBookshelf(); clearEditor();
                         hideLoading(); AppModal.success("Khôi phục file offline thành công!");
-                    } catch (err) { hideLoading(); AppModal.alert("Lỗi: " + err.message); }
+                    } catch (err) { hideLoading(); AppModal.alert("Lỗi giải mã: " + err.message); }
                 };
                 reader.readAsText(file);
-            } catch (err) { hideLoading(); AppModal.alert("Lỗi: " + err); }
+            } catch (err) { hideLoading(); AppModal.alert("Lỗi đọc file: " + err); }
         });
         event.target.value = ''; 
     }
 
     async function reloadBookshelf() {
         bookshelf = await getAllBooksFromDB(); renderBookshelf();
-        if (currentBookId) { if (!bookshelf.find(b => b.id === currentBookId)) clearEditor(); else renderTOC(); }
+        if (currentBookId) { 
+            if (!bookshelf.find(b => b.id === currentBookId)) clearEditor(); 
+            else renderTOC(); 
+        }
     }
+
     function renderBookshelf() {
         const list = document.getElementById('bookshelfList'); list.innerHTML = '';
         bookshelf.forEach(book => {
@@ -495,48 +532,44 @@
             li.appendChild(spanText); li.appendChild(delBtn); list.appendChild(li);
         });
     }
-    
+
     async function openBook(id) {
         await saveCurrentToDB(false); 
         currentBookId = id; 
-        currentChapterIndex = -1; // Reset vị trí chương để tránh kẹt bộ nhớ
-        renderBookshelf(); 
+        currentChapterIndex = -1; // Chống dính chữ truyện cũ
         
+        // Dọn dẹp khung text
+        document.getElementById('chapterTitleInput').value = '';
+        document.getElementById('chapterContentInput').value = '';
+        
+        renderBookshelf(); 
         const book = bookshelf.find(b => b.id === currentBookId);
         document.getElementById('currentBookLabel').innerText = book.title; 
-        document.getElementById('currentBookLabel').title = book.title;
         
-        // TẢI TỪ ĐIỂN ĐỘC LẬP CHO TRUYỆN NÀY
+        // TẢI TỪ ĐIỂN ĐỘC LẬP
         dictPairs = book.dictPairs || [];
         renderDict();
-
         renderTOC(); 
+        
         if (book.chapters && book.chapters.length > 0) {
             loadChapter(0);
         } else {
-            // Xóa sạch ô text nếu truyện trống
-            document.getElementById('chapterTitleInput').value = '';
-            document.getElementById('chapterContentInput').value = '';
             document.getElementById('welcomeMessage').style.display = 'block'; 
             document.getElementById('editorArea').style.display = 'none';
         }
     }
-    
+
     function confirmDeleteBook(id, title) {
         AppModal.confirm(`Xóa truyện "${title}" khỏi tủ?`, async () => {
             await deleteBookFromDB(id); if (currentBookId === id) clearEditor();
             await reloadBookshelf(); showToast("Đã xóa truyện.");
         });
     }
-    
+
     function clearEditor() {
         currentBookId = null; currentChapterIndex = -1; dictPairs = []; renderDict();
         document.getElementById('currentBookLabel').innerText = ''; document.getElementById('tocList').innerHTML = '';
-        
-        // Đảm bảo không còn lưu rác văn bản trên khung hiển thị
-        document.getElementById('chapterTitleInput').value = '';
-        document.getElementById('chapterContentInput').value = '';
-        
+        document.getElementById('chapterTitleInput').value = ''; document.getElementById('chapterContentInput').value = '';
         document.getElementById('welcomeMessage').style.display = 'block'; document.getElementById('editorArea').style.display = 'none';
     }
 
@@ -561,11 +594,15 @@
         const book = bookshelf.find(b => b.id === currentBookId);
         if (index < 0 || index >= book.chapters.length) return;
         currentChapterIndex = index;
-        document.getElementById('welcomeMessage').style.display = 'none'; document.getElementById('editorArea').style.display = 'flex';
+        
+        document.getElementById('welcomeMessage').style.display = 'none'; 
+        document.getElementById('editorArea').style.display = 'flex';
+        
         document.getElementById('chapterTitleInput').value = book.chapters[index].title;
         document.getElementById('chapterContentInput').value = book.chapters[index].content;
         highlightCurrentChapter(); updateWordCount();
         
+        // Khôi phục con trỏ
         const contentInput = document.getElementById('chapterContentInput');
         const savedScroll = book.chapters[index].scrollTop || 0;
         const savedCursor = book.chapters[index].cursorPos || 0;
@@ -575,7 +612,6 @@
             contentInput.setSelectionRange(savedCursor, savedCursor);
             contentInput.focus();
         }, 10);
-        document.querySelector('.main-content').scrollTop = 0;
     }
 
     function highlightCurrentChapter() {
@@ -591,7 +627,7 @@
         const checkboxes = document.querySelectorAll('.chap-checkbox:checked');
         if (checkboxes.length === 0) return AppModal.alert("Vui lòng tích chọn ít nhất 1 chương để xóa!");
         
-        AppModal.confirm(`Bạn có chắc chắn muốn xóa ${checkboxes.length} chương đã chọn? Không thể hoàn tác.`, async () => {
+        AppModal.confirm(`Xóa ${checkboxes.length} chương đã chọn? Không thể hoàn tác.`, async () => {
             showLoading("Đang xóa chương...");
             const book = bookshelf.find(b => b.id === currentBookId);
             const indicesToDelete = Array.from(checkboxes).map(cb => parseInt(cb.value)).sort((a, b) => b - a);
@@ -617,15 +653,15 @@
     async function saveCurrentToDB(showNotification = false) {
         if (!currentBookId || currentChapterIndex === -1) return;
         const book = bookshelf.find(b => b.id === currentBookId);
+        if (!book || !book.chapters[currentChapterIndex]) return;
+
         const contentInput = document.getElementById('chapterContentInput');
-        
         book.chapters[currentChapterIndex].title = document.getElementById('chapterTitleInput').value;
         book.chapters[currentChapterIndex].content = contentInput.value;
         book.chapters[currentChapterIndex].scrollTop = contentInput.scrollTop;
         book.chapters[currentChapterIndex].cursorPos = contentInput.selectionStart;
 
-        // Lưu luôn từ điển của truyện
-        book.dictPairs = dictPairs;
+        book.dictPairs = dictPairs; // Lưu từ điển
 
         await saveBookToDB(book);
         const tocItems = document.getElementById('tocList').children;
@@ -637,8 +673,18 @@
     async function prevChapter() { await saveCurrentToDB(false); if(currentChapterIndex > 0) loadChapter(currentChapterIndex - 1); }
     async function nextChapter() {
         await saveCurrentToDB(false); const book = bookshelf.find(b => b.id === currentBookId);
-        if(currentChapterIndex < book.chapters.length - 1) loadChapter(currentChapterIndex + 1);
+        if(book && currentChapterIndex < book.chapters.length - 1) loadChapter(currentChapterIndex + 1);
     }
+
+    // Xử lý phím tắt
+    document.addEventListener('keydown', function(e) {
+        if (!currentBookId) return;
+        if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); manualSaveCurrent(); }
+        if (e.ctrlKey && e.key === 'ArrowLeft') { e.preventDefault(); prevChapter(); }
+        if (e.ctrlKey && e.key === 'ArrowRight') { e.preventDefault(); nextChapter(); }
+        if (e.key === 'Escape' && document.body.classList.contains('zen-mode')) { toggleZenMode(); }
+    });
+    function toggleZenMode() { document.body.classList.toggle('zen-mode'); }
 
     function splitTextIntoChapters(text) {
         const regex = /^((?:Chương|Hồi|Tiết|Phần|Quyển|Chương mới)\s*.{0,120})$/gim;
@@ -678,18 +724,20 @@
         });
     }
 
-    document.getElementById('fileInput').addEventListener('change', async function(e) {
-        const file = e.target.files[0]; if (!file) return;
-        const bookTitle = file.name.replace(/\.[^/.]+$/, ""); showLoading("Đang xử lý và tạo truyện...");
-        try {
-            const chapters = await parseFileToChapters(file);
-            const newBook = { id: Date.now().toString(), title: bookTitle, chapters: chapters, dictPairs: [] };
-            await saveBookToDB(newBook); await reloadBookshelf(); await openBook(newBook.id);
-            await autoReplaceCurrentBookSilently(); // Tự thay thế dựa trên từ điển của truyện
-            hideLoading(); AppModal.success(`Đã thêm truyện "${bookTitle}" (${chapters.length} chương)!`);
-        } catch(err) { hideLoading(); AppModal.alert("Lỗi: " + err); }
-        e.target.value = ''; 
-    });
+    const fileInputElement = document.getElementById('fileInput');
+    if (fileInputElement) {
+        fileInputElement.addEventListener('change', async function(e) {
+            const file = e.target.files[0]; if (!file) return;
+            const bookTitle = file.name.replace(/\.[^/.]+$/, ""); showLoading("Đang xử lý và tạo truyện...");
+            try {
+                const chapters = await parseFileToChapters(file);
+                const newBook = { id: Date.now().toString(), title: bookTitle, chapters: chapters, dictPairs: [] };
+                await saveBookToDB(newBook); await reloadBookshelf(); await openBook(newBook.id);
+                hideLoading(); AppModal.success(`Đã thêm truyện "${bookTitle}"!`);
+            } catch(err) { hideLoading(); AppModal.alert("Lỗi: " + err); }
+            e.target.value = ''; 
+        });
+    }
 
     function openAddChapterModal() {
         if(!currentBookId) return AppModal.alert("Vui lòng mở truyện trước!");
@@ -716,7 +764,7 @@
             if (insertIndex < 0) insertIndex = 0;
             book.chapters.splice(insertIndex, 0, ...newChapters);
             await saveBookToDB(book); renderTOC(); loadChapter(insertIndex); 
-            await autoReplaceCurrentBookSilently();
+            await autoReplaceCurrentBookSilently(); // Tự thay khi thêm chương mới
             hideLoading(); showToast(`Đã chèn ${newChapters.length} chương!`);
         }
     }
@@ -731,17 +779,17 @@
                 <button onclick="removeDictRow(${index})" title="Xóa">✕</button>`;
             dictList.appendChild(div);
         });
-        saveCurrentToDB(false); // Lưu từ điển vào DB truyện hiện tại
+        saveCurrentToDB(false);
     }
     function addDictRow() { dictPairs.push({find: "", replace: ""}); renderDict(); document.getElementById('dictList').scrollTop = document.getElementById('dictList').scrollHeight; }
     function removeDictRow(index) { dictPairs.splice(index, 1); renderDict(); autoReplaceCurrentBookSilently(); }
     function updateDict(index, key, value) {
-        dictPairs[index][key] = value; renderDict(); // Gọi renderDict để saveCurrentToDB ngầm
+        dictPairs[index][key] = value; renderDict(); 
         if (dictPairs[index].find.trim() !== "" && dictPairs[index].replace.trim() !== "") autoReplaceCurrentBookSilently();
     }
     
     document.getElementById('dictInput').addEventListener('change', function(e) {
-        if (!currentBookId) { e.target.value = ''; return AppModal.alert("Bạn phải mở một truyện để thêm từ điển cho nó!"); }
+        if (!currentBookId) { e.target.value = ''; return AppModal.alert("Mở một truyện để tải từ điển!"); }
         const file = e.target.files[0]; if (!file) return;
         const reader = new FileReader();
         reader.onload = function(event) {
@@ -765,7 +813,7 @@
         book.chapters.forEach(chap => {
             validPairs.forEach(pair => {
                 const escapedFind = pair.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
-                const regex = new RegExp(escapedFind, 'gi'); 
+                const regex = new RegExp(escapedFind, 'gi'); // 'i' flag để không phân biệt hoa thường
                 
                 const m = (chap.content.match(regex) || []).length + (chap.title.match(regex) || []).length; total += m;
                 
@@ -789,11 +837,11 @@
     }
 
     async function applyDictionaryManual() {
-        if (!currentBookId) return AppModal.alert("Bạn chưa mở truyện nào cả!");
+        if (!currentBookId) return AppModal.alert("Bạn chưa mở truyện nào!");
         const validPairs = dictPairs.filter(p => p.find.trim() !== ""); 
-        if (validPairs.length === 0) return AppModal.alert("Từ điển của truyện này đang trống!");
+        if (validPairs.length === 0) return AppModal.alert("Từ điển trống!");
         
-        AppModal.confirm("Quét toàn bộ tất cả CHƯƠNG của truyện đang đọc. Chắc chắn?", async () => {
+        AppModal.confirm("Quét toàn bộ chương của truyện đang đọc. Chắc chắn?", async () => {
             await saveCurrentToDB(false); showLoading("Đang quét truyện này...");
             setTimeout(async () => {
                 let total = 0;
@@ -810,20 +858,19 @@
                             }
                             return pair.replace;
                         };
-
                         chap.title = chap.title.replace(regex, smartReplace); 
                         chap.content = chap.content.replace(regex, smartReplace);
                     });
                 });
                 await saveBookToDB(book);
                 await reloadBookshelf(); if (currentBookId) { loadChapter(currentChapterIndex); updateWordCount(); }
-                hideLoading(); AppModal.success(`Hoàn tất! Đã thay ${total} cụm từ trong truyện này.`);
+                hideLoading(); AppModal.success(`Hoàn tất! Đã thay ${total} cụm từ.`);
             }, 100);
         });
     }
 
     function openScannerModal() {
-        if (!currentBookId) return AppModal.alert("Vui lòng mở một truyện trước khi dùng AI Quét!");
+        if (!currentBookId) return AppModal.alert("Vui lòng mở một truyện trước!");
         const savedKey = localStorage.getItem('geminiApiKey_V8') || '';
         document.getElementById('geminiApiKeyInput').value = savedKey;
         document.getElementById('scannerResultsContainer').style.display = 'none';
@@ -833,18 +880,16 @@
     async function saveApiKeyAndScan() {
         const apiKey = document.getElementById('geminiApiKeyInput').value.trim();
         localStorage.setItem('geminiApiKey_V8', apiKey);
-        
         await saveCurrentToDB(false);
         document.getElementById('scanLoadingBox').style.display = 'block';
         document.getElementById('scannerResultsContainer').style.display = 'none';
-        document.getElementById('scanProgressText').innerText = "Đang trích xuất dữ liệu thô...";
+        document.getElementById('scanProgressText').innerText = "Đang trích xuất dữ liệu...";
 
         setTimeout(async () => {
             try {
                 const book = bookshelf.find(b => b.id === currentBookId);
                 let fullText = "";
                 book.chapters.forEach(chap => fullText += chap.title + "\n" + chap.content + "\n");
-                
                 fullText = fullText.normalize('NFC');
 
                 const upper = "A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴỶỸ";
@@ -853,7 +898,6 @@
                 
                 const entityMap = new Map();
                 let match;
-                
                 while ((match = entityRegex.exec(fullText)) !== null) {
                     let entity = match[1].trim();
                     const stopWords = ["Chương", "Phần", "Quyển", "Hồi", "Tiết", "Nhưng", "Vậy", "Thế", "Khi", "Lúc", "Và", "Rồi", "Thì", "Tại", "Bởi", "Vì", "Tuy", "Dù", "Nên", "Nếu", "Các", "Những", "Một"];
@@ -862,20 +906,16 @@
                     entityMap.set(entity, (entityMap.get(entity) || 0) + 1);
                 }
 
-                let sortedEntitiesArr = Array.from(entityMap.entries())
-                    .filter(item => item[1] >= 3)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 150);
-                
+                let sortedEntitiesArr = Array.from(entityMap.entries()).filter(item => item[1] >= 3).sort((a, b) => b[1] - a[1]).slice(0, 100);
                 let wordsList = sortedEntitiesArr.map(item => item[0]);
                 let categorizedData = { characters: [], skills: [], locations: [], others: [] };
 
                 if (wordsList.length > 0) {
                     if (apiKey) {
-                        document.getElementById('scanProgressText').innerText = "Đang gửi cho AI phân tích phân loại...";
+                        document.getElementById('scanProgressText').innerText = "Đang gửi AI phân tích...";
                         categorizedData = await classifyWithGemini(apiKey, wordsList);
                     } else {
-                        document.getElementById('scanProgressText').innerText = "Đang dùng thuật toán nội bộ phân loại...";
+                        document.getElementById('scanProgressText').innerText = "Dùng thuật toán offline...";
                         categorizedData = classifyLocally(wordsList);
                     }
                 }
@@ -892,7 +932,7 @@
                 document.getElementById('scannerResultsContainer').style.display = 'block';
             } catch (err) {
                 document.getElementById('scanLoadingBox').style.display = 'none';
-                AppModal.alert("Lỗi quá trình quét: " + err.message);
+                AppModal.alert("Lỗi quét: " + err.message);
             }
         }, 100);
     }
@@ -915,37 +955,20 @@
     async function classifyWithGemini(apiKey, words) {
         try {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-            const prompt = `Bạn là hệ thống phân loại danh từ cho truyện. Phân loại danh sách từ sau vào 4 mảng JSON (chỉ trả về JSON thuần): 
-            {"characters": [], "skills": [], "locations": [], "others": []}
-            - characters: Tên người.
-            - skills: Công pháp, chiêu thức, vũ khí, bảo vật.
-            - locations: Địa danh, thế lực, tông môn.
-            - others: Chức vụ, cảnh giới hoặc từ bị viết sai.
-            Danh sách từ: ${words.join(', ')}`;
-
+            const prompt = `Phân loại danh sách từ sau vào 4 mảng JSON (chỉ trả về JSON thuần): {"characters": [], "skills": [], "locations": [], "others": []}\nDanh sách từ: ${words.join(', ')}`;
             const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
             });
-            
-            if (!response.ok) throw new Error("API Key sai hoặc lỗi mạng");
-            
+            if (!response.ok) throw new Error("API Key sai");
             const data = await response.json();
             let textRes = data.candidates[0].content.parts[0].text;
-            
             textRes = textRes.replace(new RegExp('```json', 'gi'), '').replace(new RegExp('```', 'g'), '').trim();
-            
             const parsed = JSON.parse(textRes);
-            return {
-                characters: parsed.characters || [],
-                skills: parsed.skills || [],
-                locations: parsed.locations || [],
-                others: parsed.others || []
-            };
+            return { characters: parsed.characters||[], skills: parsed.skills||[], locations: parsed.locations||[], others: parsed.others||[] };
         } catch (err) {
-            console.error(err);
-            showToast("Lỗi kết nối AI, tự động chuyển về quét nội bộ!");
+            showToast("Lỗi AI, chuyển về offline!");
             return classifyLocally(words);
         }
     }
@@ -953,61 +976,31 @@
     function renderAccordionUI(data) {
         const container = document.getElementById('scannerResultsContainer');
         container.innerHTML = '';
-
         const generateBlock = (title, icon, items) => {
             if(items.length === 0) return '';
-            let html = `<details class="category-block" open>
-                <summary>${icon} ${title} (${items.length}) <span style="font-size:12px; color:var(--text-muted);">▼</span></summary>
-                <div class="category-content">`;
-            
-            items.forEach((item, idx) => {
+            let html = `<details class="category-block" open><summary>${icon} ${title} (${items.length}) <span>▼</span></summary><div class="category-content">`;
+            items.forEach((item) => {
                 const uniqueId = Math.random().toString(36).substr(2, 9);
-                html += `
-                <div class="scan-item" id="item_row_${uniqueId}">
-                    <div style="flex:1;">
-                        <div class="scan-word">${item.word}</div>
-                        <span class="scan-count">${item.count} lần</span>
-                    </div>
-                    <div style="color:var(--text-muted);">👉</div>
-                    <input type="text" class="scan-input" placeholder="Thay thành..." id="input_${uniqueId}">
-                    <button style="background: var(--success); padding: 4px 10px; font-size: 12px;" onclick="addScannedWord('${item.word.replace(/'/g, "\\'")}', '${uniqueId}')">+ Thêm</button>
-                </div>`;
+                html += `<div class="scan-item" id="item_row_${uniqueId}"><div style="flex:1;"><div class="scan-word">${item.word}</div><span class="scan-count">${item.count} lần</span></div>
+                    <div style="color:var(--text-muted);">👉</div><input type="text" class="scan-input" placeholder="Thay thành..." id="input_${uniqueId}">
+                    <button style="background: var(--success);" onclick="addScannedWord('${item.word.replace(/'/g, "\\'")}', '${uniqueId}')">+ Thêm</button></div>`;
             });
-            html += `</div></details>`;
-            return html;
+            html += `</div></details>`; return html;
         };
-
-        container.innerHTML += generateBlock("Nhân Vật", "👤", data.characters);
-        container.innerHTML += generateBlock("Công Pháp / Vật Phẩm", "⚔️", data.skills);
-        container.innerHTML += generateBlock("Địa Danh / Thế Lực", "🏯", data.locations);
-        container.innerHTML += generateBlock("Chưa Phân Loại", "📌", data.others);
-
-        if(container.innerHTML === '') {
-            container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Không tìm thấy tên riêng nổi bật nào.</div>';
-        }
+        container.innerHTML += generateBlock("Nhân Vật", "👤", data.characters) + generateBlock("Công Pháp / Vật Phẩm", "⚔️", data.skills) + generateBlock("Địa Danh", "🏯", data.locations) + generateBlock("Khác", "📌", data.others);
     }
 
     function addScannedWord(originalWord, inputId) {
         const replaceWord = document.getElementById(`input_${inputId}`).value.trim();
         if (!replaceWord) return AppModal.alert("Vui lòng nhập từ mới!");
-        
-        dictPairs.unshift({ find: originalWord, replace: replaceWord }); 
-        renderDict();
-        autoReplaceCurrentBookSilently(); 
-        
-        const row = document.getElementById(`item_row_${inputId}`);
-        row.style.opacity = '0.3';
-        row.style.pointerEvents = 'none';
-        row.querySelector('button').innerText = "Đã thêm";
-        
-        showToast(`Đã thêm vào truyện: ${originalWord} -> ${replaceWord}`);
+        dictPairs.unshift({ find: originalWord, replace: replaceWord }); renderDict(); autoReplaceCurrentBookSilently(); 
+        const row = document.getElementById(`item_row_${inputId}`); row.style.opacity = '0.3'; row.style.pointerEvents = 'none'; row.querySelector('button').innerText = "Đã thêm";
     }
 
     function updateWordCount() {
         const text = document.getElementById('chapterContentInput').value;
         const cleanText = text.trim().replace(/\s+/g, ' ');
-        const wordCount = cleanText === '' ? 0 : cleanText.split(' ').length;
-        document.getElementById('wordCountDisplay').innerText = wordCount.toLocaleString('vi-VN');
+        document.getElementById('wordCountDisplay').innerText = cleanText === '' ? 0 : cleanText.split(' ').length.toLocaleString('vi-VN');
     }
     document.getElementById('chapterContentInput').addEventListener('input', updateWordCount);
 
@@ -1019,32 +1012,63 @@
         localStorage.setItem('displaySettings_V7', JSON.stringify(displaySettings));
     }
     function changeTheme(theme) { displaySettings.theme = theme; applyDisplaySettings(); }
-    function changeFontSize(step) {
-        displaySettings.fontSize += step;
-        if (displaySettings.fontSize < 12) displaySettings.fontSize = 12;
-        if (displaySettings.fontSize > 32) displaySettings.fontSize = 32;
-        applyDisplaySettings();
+    function changeFontSize(step) { displaySettings.fontSize = Math.max(12, Math.min(32, displaySettings.fontSize + step)); applyDisplaySettings(); }
+
+    let currentExportType = 'txt';
+    function openExportModal(type) {
+        if (!currentBookId) return AppModal.alert("Chọn truyện cần xuất!");
+        const book = bookshelf.find(b => b.id === currentBookId);
+        if (!book.chapters || book.chapters.length === 0) return AppModal.alert("Truyện chưa có chương!");
+
+        currentExportType = type;
+        document.getElementById('exportModalTitle').innerText = type === 'txt' ? 'Xuất File TXT' : 'Xuất File DOCX';
+        
+        const startSel = document.getElementById('exportStart');
+        const endSel = document.getElementById('exportEnd');
+        startSel.innerHTML = '';
+        endSel.innerHTML = '';
+        
+        book.chapters.forEach((c, idx) => {
+            startSel.add(new Option(c.title, idx));
+            endSel.add(new Option(c.title, idx));
+        });
+        
+        startSel.selectedIndex = 0;
+        endSel.selectedIndex = book.chapters.length - 1;
+
+        document.getElementById('exportModal').style.display = 'flex'; toggleExportInputs();
     }
 
-    async function exportTxt() {
-        if (!currentBookId) return AppModal.alert("Chọn truyện cần tải!"); await saveCurrentToDB(false);
-        const book = bookshelf.find(b => b.id === currentBookId); let fullText = "";
-        book.chapters.forEach(chap => { fullText += chap.title + "\n\n" + chap.content + "\n\n\n"; });
-        saveAs(new Blob([fullText], { type: "text/plain;charset=utf-8" }), `${book.title}.txt`);
-    }
-    async function exportDocx() {
-        if (!currentBookId) return AppModal.alert("Chọn truyện cần tải!"); showLoading("Đang tạo file Word...");
-        setTimeout(async () => {
-            await saveCurrentToDB(false); const book = bookshelf.find(b => b.id === currentBookId);
-            let htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family: 'Times New Roman', serif; font-size: 14pt; line-height: 1.5;">`;
-            book.chapters.forEach(chap => {
-                htmlContent += `<h2 style="text-align: center; margin-bottom: 20px;">${chap.title}</h2>`;
-                chap.content.split('\n').forEach(p => { if(p.trim()) htmlContent += `<p style="text-indent: 1.5em; margin-top: 0; margin-bottom: 10px;">${p.trim()}</p>`; });
-                htmlContent += `<br style="page-break-before: always; clear: both;" />`; 
-            });
-            htmlContent += `</body></html>`;
-            saveAs(htmlDocx.asBlob(htmlContent), `${book.title}.docx`); hideLoading();
-        }, 50);
+    function toggleExportInputs() { document.getElementById('exportCustomInputs').style.display = document.querySelector('input[name="exportRange"]:checked').value === 'custom' ? 'flex' : 'none'; }
+
+    async function confirmExport() {
+        document.getElementById('exportModal').style.display = 'none'; await saveCurrentToDB(false);
+        const book = bookshelf.find(b => b.id === currentBookId);
+        let startIdx = 0, endIdx = book.chapters.length - 1;
+        
+        if (document.querySelector('input[name="exportRange"]:checked').value === 'custom') {
+            startIdx = parseInt(document.getElementById('exportStart').value); 
+            endIdx = parseInt(document.getElementById('exportEnd').value);
+            if (startIdx > endIdx) return AppModal.alert(`Lỗi: Chương bắt đầu phải nằm trước chương kết thúc.`);
+        }
+
+        const exportChaps = book.chapters.slice(startIdx, endIdx + 1);
+        if (currentExportType === 'txt') {
+            let txt = ""; exportChaps.forEach(c => txt += c.title + "\n\n" + c.content + "\n\n\n");
+            saveAs(new Blob([txt], { type: "text/plain;charset=utf-8" }), `${book.title}.txt`);
+        } else {
+            showLoading("Đang tạo file Word...");
+            setTimeout(() => {
+                let html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:'Times New Roman',serif; font-size:14pt; line-height:1.5;">`;
+                exportChaps.forEach(c => {
+                    html += `<h2 style="text-align:center; margin-bottom:20px;">${c.title}</h2>`;
+                    c.content.split('\n').forEach(p => { if(p.trim()) html += `<p style="text-indent:1.5em; margin-top:0; margin-bottom:10px;">${p.trim()}</p>`; });
+                    html += `<br style="page-break-before:always; clear:both;" />`; 
+                });
+                html += `</body></html>`;
+                saveAs(htmlDocx.asBlob(html), `${book.title}.docx`); hideLoading();
+            }, 50);
+        }
     }
 </script>
 
